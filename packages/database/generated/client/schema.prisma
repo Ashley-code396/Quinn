@@ -1,0 +1,512 @@
+// This is your Prisma schema file for Quinn — AI CMO for Dermaqea
+// Using PostgreSQL with pgvector for semantic memory
+
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../generated/client"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum ApprovalType {
+  EMAIL
+  LINKEDIN_POST
+  BLOG_POST
+  PARTNERSHIP_PROPOSAL
+  GRANT_APPLICATION
+  INVESTOR_OUTREACH
+  CONFERENCE_REGISTRATION
+  PITCH_DECK
+  NEWSLETTER
+  SOCIAL_MEDIA
+  WHITEPAPER
+  PRESS_RELEASE
+  OTHER
+}
+
+enum Priority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum Effort {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum OutreachStatus {
+  NOT_CONTACTED
+  RESEARCHING
+  DRAFT_READY
+  AWAITING_APPROVAL
+  CONTACTED
+  RESPONDED
+  IN_CONVERSATION
+  MEETING_SCHEDULED
+  PROPOSAL_SENT
+  NEGOTIATING
+  PARTNER
+  DECLINED
+  DORMANT
+}
+
+enum RelationshipStage {
+  PROSPECT
+  INITIAL_CONTACT
+  ENGAGED
+  MEETING_HELD
+  PROPOSAL_STAGE
+  NEGOTIATION
+  ACTIVE_PARTNER
+  CHURNED
+  REACTIVATION
+}
+
+enum ContentStatus {
+  IDEA
+  DRAFTING
+  REVIEW
+  AWAITING_APPROVAL
+  APPROVED
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ContentType {
+  LINKEDIN_POST
+  BLOG_ARTICLE
+  FOUNDER_UPDATE
+  EDUCATIONAL
+  TECHNICAL_EXPLAINER
+  WHITEPAPER
+  CASE_STUDY
+  NEWSLETTER
+  SOCIAL_MEDIA
+  PRODUCT_ANNOUNCEMENT
+  COUNTERFEIT_AWARENESS
+  PRESS_RELEASE
+}
+
+enum OpportunityType {
+  ENTERPRISE_PROSPECT
+  PILOT_CUSTOMER
+  STRATEGIC_PARTNER
+  INVESTOR
+  ACCELERATOR
+  GRANT
+  CONFERENCE
+  COMPETITION
+  MEDIA_FEATURE
+  SPEAKING_ENGAGEMENT
+}
+
+enum OpportunityStatus {
+  IDENTIFIED
+  RESEARCHING
+  QUALIFIED
+  PURSUING
+  APPLIED
+  IN_PROGRESS
+  WON
+  LOST
+  DEFERRED
+}
+
+enum GoalStatus {
+  PLANNED
+  IN_PROGRESS
+  ON_TRACK
+  AT_RISK
+  BEHIND
+  COMPLETED
+  CANCELLED
+}
+
+enum AgentName {
+  QUINN
+  SAGE
+  NOVA
+  ATLAS
+  IRIS
+  HELIX
+  BEACON
+}
+
+enum BriefingType {
+  DAILY
+  WEEKLY
+  QUARTERLY
+  AD_HOC
+}
+
+// ============================================
+// CORE MODELS
+// ============================================
+
+/// Organizations researched by Sage — companies, brands, potential partners
+model Organization {
+  id                   String         @id @default(cuid())
+  name                 String
+  website              String?
+  country              String?
+  industry             String?
+  products             String[]
+  companySize          String?
+  decisionMakers       Json? // { name, title, email, linkedin }[]
+  contactInfo          Json? // { email, phone, address }
+  linkedinUrl          String?
+  recentNews           String?        @db.Text
+  dermaqeaRelevance    String?        @db.Text
+  partnershipPotential String?        @db.Text
+  priorityScore        Float          @default(0)
+  outreachStatus       OutreachStatus @default(NOT_CONTACTED)
+  researchNotes        String?        @db.Text
+  tags                 String[]
+  lastResearchedAt     DateTime?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  contacts      Contact[]
+  relationships Relationship[]
+  opportunities Opportunity[]
+
+  @@index([priorityScore(sort: Desc)])
+  @@index([outreachStatus])
+  @@index([industry])
+}
+
+/// Individual contacts / decision-makers
+model Contact {
+  id             String   @id @default(cuid())
+  firstName      String
+  lastName       String
+  email          String?
+  phone          String?
+  title          String?
+  linkedinUrl    String?
+  organizationId String?
+  notes          String?  @db.Text
+  tags           String[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization  Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  relationships Relationship[]
+
+  @@index([organizationId])
+  @@index([email])
+}
+
+/// CRM relationship state managed by Iris
+model Relationship {
+  id              String            @id @default(cuid())
+  organizationId  String?
+  contactId       String?
+  stage           RelationshipStage @default(PROSPECT)
+  interestLevel   Int               @default(0) // 0-10
+  lastContactDate DateTime?
+  nextFollowUp    DateTime?
+  followUpNotes   String?           @db.Text
+  interactions    Json? // { date, type, summary }[]
+  notes           String?           @db.Text
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  contact      Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([stage])
+  @@index([nextFollowUp])
+  @@index([organizationId])
+  @@index([contactId])
+}
+
+/// Content items generated by Nova
+model ContentItem {
+  id           String        @id @default(cuid())
+  type         ContentType
+  title        String
+  body         String        @db.Text
+  summary      String?       @db.Text
+  status       ContentStatus @default(IDEA)
+  tags         String[]
+  targetDate   DateTime?
+  publishedAt  DateTime?
+  publishedUrl String?
+  performance  Json? // { views, likes, comments, shares, clicks }
+  agentNotes   String?       @db.Text
+  version      Int           @default(1)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  calendarEntries ContentCalendarEntry[]
+  approvals       Approval[]
+
+  @@index([type])
+  @@index([status])
+  @@index([targetDate])
+}
+
+/// Content calendar for monthly planning
+model ContentCalendarEntry {
+  id            String      @id @default(cuid())
+  contentItemId String?
+  date          DateTime
+  slot          String? // "morning", "afternoon", "evening"
+  contentType   ContentType
+  topic         String
+  notes         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  contentItem ContentItem? @relation(fields: [contentItemId], references: [id], onDelete: SetNull)
+
+  @@index([date])
+}
+
+/// Growth opportunities tracked by Atlas
+model Opportunity {
+  id               String            @id @default(cuid())
+  type             OpportunityType
+  title            String
+  description      String            @db.Text
+  organizationId   String?
+  strategicFit     Int               @default(0) // 1-10
+  revenuePotential Int               @default(0) // 1-10
+  brandValue       Int               @default(0) // 1-10
+  effortRequired   Effort            @default(MEDIUM)
+  probability      Int               @default(0) // 0-100%
+  status           OpportunityStatus @default(IDENTIFIED)
+  deadline         DateTime?
+  estimatedValue   Float?
+  notes            String?           @db.Text
+  actionItems      Json? // { task, assignee, due }[]
+  tags             String[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([type])
+  @@index([status])
+  @@index([probability(sort: Desc)])
+}
+
+/// Human approval queue
+model Approval {
+  id            String         @id @default(cuid())
+  type          ApprovalType
+  title         String
+  description   String         @db.Text
+  content       Json // The actual draft/proposal
+  agentName     AgentName
+  status        ApprovalStatus @default(PENDING)
+  priority      Priority       @default(MEDIUM)
+  reasoning     String         @db.Text
+  impact        String         @db.Text
+  effort        Effort
+  confidence    Float // 0-100
+  metrics       String[] // Success measurement criteria
+  contentItemId String?
+  reviewedAt    DateTime?
+  reviewNotes   String?        @db.Text
+  expiresAt     DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  contentItem ContentItem? @relation(fields: [contentItemId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([priority])
+  @@index([agentName])
+  @@index([type])
+}
+
+/// Quarterly goals and OKRs
+model QuarterlyGoal {
+  id          String     @id @default(cuid())
+  quarter     String // "2026-Q3"
+  title       String
+  description String     @db.Text
+  status      GoalStatus @default(PLANNED)
+  progress    Float      @default(0) // 0-100
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  keyResults  KeyResult[]
+  initiatives Initiative[]
+
+  @@index([quarter])
+  @@index([status])
+}
+
+/// Key results tied to quarterly goals
+model KeyResult {
+  id           String     @id @default(cuid())
+  goalId       String
+  title        String
+  targetValue  Float
+  currentValue Float      @default(0)
+  unit         String // "followers", "meetings", "partnerships", "%"
+  status       GoalStatus @default(PLANNED)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  goal QuarterlyGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@index([goalId])
+}
+
+/// Marketing initiatives
+model Initiative {
+  id          String     @id @default(cuid())
+  goalId      String
+  title       String
+  description String     @db.Text
+  status      GoalStatus @default(PLANNED)
+  assignedTo  AgentName
+  startDate   DateTime?
+  endDate     DateTime?
+  notes       String?    @db.Text
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  goal QuarterlyGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@index([goalId])
+  @@index([assignedTo])
+  @@index([status])
+}
+
+/// Analytics snapshots from Beacon
+model AnalyticsSnapshot {
+  id        String   @id @default(cuid())
+  date      DateTime @default(now())
+  period    String // "daily", "weekly", "monthly"
+  metrics   Json // { linkedinFollowers, websiteTraffic, contentViews, ... }
+  insights  String?  @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([date])
+  @@index([period])
+}
+
+/// Executive briefings
+model Briefing {
+  id         String       @id @default(cuid())
+  type       BriefingType
+  date       DateTime     @default(now())
+  title      String
+  summary    String       @db.Text
+  sections   Json // { agent, title, content, recommendations }[]
+  priorities Json? // Ordered list of priorities
+  alerts     Json? // Urgent items
+  createdAt  DateTime     @default(now())
+
+  @@index([type])
+  @@index([date(sort: Desc)])
+}
+
+/// Pitch decks and marketing assets from Helix
+model MarketingAsset {
+  id          String   @id @default(cuid())
+  type        String // "pitch_deck", "one_pager", "brochure", etc.
+  title       String
+  description String?  @db.Text
+  content     Json // Structured content for the asset
+  version     Int      @default(1)
+  tags        String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([type])
+}
+
+/// Semantic memory with pgvector embeddings
+model Memory {
+  id         String                       @id @default(cuid())
+  agentName  AgentName
+  category   String // "research", "conversation", "decision", "feedback", "preference"
+  content    String                       @db.Text
+  embedding  Unsupported("vector(1536)")?
+  metadata   Json?
+  importance Float                        @default(0.5) // 0-1 importance score for retrieval
+  createdAt  DateTime                     @default(now())
+  updatedAt  DateTime                     @updatedAt
+
+  @@index([agentName, category])
+  @@index([importance(sort: Desc)])
+}
+
+/// Audit trail of all agent actions
+model AgentLog {
+  id        String    @id @default(cuid())
+  agentName AgentName
+  action    String
+  input     Json?
+  output    Json?
+  duration  Int? // milliseconds
+  success   Boolean   @default(true)
+  error     String?
+  metadata  Json?
+  createdAt DateTime  @default(now())
+
+  @@index([agentName])
+  @@index([action])
+  @@index([createdAt(sort: Desc)])
+}
+
+/// Founder preferences and feedback patterns
+model FounderPreference {
+  id        String   @id @default(cuid())
+  category  String // "tone", "content_style", "priorities", "brand_guidelines"
+  key       String
+  value     String   @db.Text
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([category, key])
+  @@index([category])
+}
+
+/// Campaign tracking
+model Campaign {
+  id          String    @id @default(cuid())
+  name        String
+  description String    @db.Text
+  type        String // "awareness", "lead_gen", "thought_leadership", etc.
+  status      String    @default("planned") // planned, active, paused, completed
+  startDate   DateTime?
+  endDate     DateTime?
+  goals       Json? // Campaign-specific goals
+  metrics     Json? // Performance metrics
+  channels    String[] // linkedin, blog, email, etc.
+  budget      Float?
+  notes       String?   @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status])
+  @@index([type])
+}

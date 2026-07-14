@@ -1,0 +1,27 @@
+{
+  "name": "quinn",
+  "private": true,
+  "description": "Quinn — AI Chief Marketing Officer for Dermaqea",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "db:generate": "turbo run db:generate --filter=@quinn/database",
+    "db:push": "turbo run db:push --filter=@quinn/database",
+    "db:migrate": "turbo run db:migrate --filter=@quinn/database",
+    "db:seed": "turbo run db:seed --filter=@quinn/database",
+    "db:studio": "turbo run db:studio --filter=@quinn/database",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.3.0",
+    "turbo": "^2.5.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.0"
+}
