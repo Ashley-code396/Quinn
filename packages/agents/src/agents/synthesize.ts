@@ -6,9 +6,10 @@
  */
 
 import { ChatGroq } from "@langchain/groq";
-import { SystemMessage, AIMessage } from "@langchain/core/messages";
+import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import type { QuinnStateType } from "../state.js";
 import { prisma } from "@quinn/database";
+import { lastMessageType } from "../messages.js";
 
 const SYNTHESIZE_PROMPT = `You are Quinn, the AI CMO of Dermaqea. You have just received reports from your specialist agents.
 
@@ -43,7 +44,7 @@ Be specific, actionable, and strategic. The founder should be able to read this 
 
 export async function synthesizeNode(state: QuinnStateType): Promise<Partial<QuinnStateType>> {
    const model = new ChatGroq({
-      model: "groq/compound",
+      model: "llama-3.3-70b-versatile",
       temperature: 0.3,
     });
 
@@ -53,11 +54,15 @@ export async function synthesizeNode(state: QuinnStateType): Promise<Partial<Qui
 
   const pendingApprovals = await prisma.approval.count({ where: { status: "PENDING" } });
 
-  const response = await model.invoke([
+  const synthMessages = [
     new SystemMessage(SYNTHESIZE_PROMPT),
-    new SystemMessage(`# Agent Reports\n${reportsContext}\n\n# Pending Approvals: ${pendingApprovals}`),
+    new SystemMessage(`# Agent Reports ${reportsContext} # Pending Approvals: ${pendingApprovals}`),
     ...state.messages.slice(-10),
-  ]);
+  ];
+  if (lastMessageType(synthMessages) !== "human") {
+    synthMessages.push(new HumanMessage("Synthesize the findings into an executive briefing."));
+  }
+  const response = await model.invoke(synthMessages);
 
   const briefingContent = response.content?.toString() ?? "Briefing generation failed.";
 
@@ -72,6 +77,8 @@ export async function synthesizeNode(state: QuinnStateType): Promise<Partial<Qui
       alerts: state.alerts as any,
     },
   });
+
+  // Save memory
 
   return {
     next: "__end__",

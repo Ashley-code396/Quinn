@@ -1,0 +1,11 @@
+{
+  "node_version": "20",
+  "graphs": {
+    "agent": {
+      "path": "./packages/agents/src/graph.ts:buildQuinnGraph",
+      "description": "AI CMO for Dermaqea"
+    }
+  },
+  "env": "./.env",
+  "dependencies": ["."]
+}

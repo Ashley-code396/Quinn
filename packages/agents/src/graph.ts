@@ -7,7 +7,9 @@
 
 import { StateGraph, END } from "@langchain/langgraph";
 import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
+import { HumanMessage, AIMessage, SystemMessage } from "@langchain/core/messages";
 import { QuinnState } from "./state.js";
+import type { QuinnStateType } from "./state.js";
 import {
   quinnNode,
   sageNode,
@@ -20,6 +22,25 @@ import {
 } from "./agents/index.js";
 
 /**
+ * Normalize input messages from LangGraph Studio.
+ * Studio sends plain objects ({ role, content }) instead of BaseMessage instances.
+ * This node converts them before they reach any agent.
+ */
+function normalizeInput(state: Record<string, any>): Partial<QuinnStateType> {
+  const messages = (state.messages ?? []) as any[];
+  const normalized = messages.map((msg: any) => {
+    if (typeof msg._getType === "function") return msg;
+    const role = msg.role ?? msg.type ?? "human";
+    const content = msg.content ?? "";
+    if (role === "human") return new HumanMessage(content);
+    if (role === "ai") return new AIMessage(content);
+    if (role === "system") return new SystemMessage(content);
+    return new HumanMessage(content);
+  });
+  return { messages: normalized as any };
+}
+
+/**
  * Build the Quinn CMO graph.
  * Call this once at startup and reuse the compiled graph.
  */
@@ -29,12 +50,17 @@ export async function buildQuinnGraph(databaseUrl?: string) {
   const connString = databaseUrl ?? process.env.DATABASE_URL;
 
   if (connString) {
-    checkpointer = PostgresSaver.fromConnString(connString);
-    await checkpointer.setup();
+    try {
+      checkpointer = PostgresSaver.fromConnString(connString);
+      await checkpointer.setup();
+    } catch (e) {
+      console.warn("Could not set up Postgres checkpointer, running without persistence:", (e as Error).message);
+    }
   }
 
   const workflow = new StateGraph(QuinnState)
     // Register all agent nodes
+    .addNode("normalize_input", normalizeInput)
     .addNode("quinn", quinnNode)
     .addNode("sage", sageNode)
     .addNode("nova", novaNode)
@@ -44,8 +70,9 @@ export async function buildQuinnGraph(databaseUrl?: string) {
     .addNode("beacon", beaconNode)
     .addNode("synthesize", synthesizeNode)
 
-    // Entry point: always start with Quinn
-    .addEdge("__start__", "quinn")
+    // Entry: normalize then hand off to Quinn
+    .addEdge("__start__", "normalize_input")
+    .addEdge("normalize_input", "quinn")
 
     // All workers return to Quinn for next delegation decision
     .addEdge("sage", "quinn")

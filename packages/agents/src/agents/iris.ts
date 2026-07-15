@@ -6,7 +6,7 @@
  */
 
 import { ChatGroq } from "@langchain/groq";
-import { SystemMessage, AIMessage } from "@langchain/core/messages";
+import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import type { QuinnStateType } from "../state.js";
 import { buildSystemPrompt } from "../prompts/system.js";
 import {
@@ -16,6 +16,7 @@ import {
   logAgentActionTool,
 } from "../tools/index.js";
 import { searchMemories, storeMemory } from "../memory/index.js";
+import { lastMessageType } from "../messages.js";
 
 const IRIS_CONTEXT = `
 # Relationship Management Priorities
@@ -73,10 +74,14 @@ export async function irisNode(
     logAgentActionTool,
   ]);
 
-  const response = await modelWithTools.invoke([
+  const irisMessages = [
     new SystemMessage(systemPrompt),
     ...state.messages.slice(-5),
-  ]);
+  ];
+  if (lastMessageType(irisMessages) !== "human") {
+    irisMessages.push(new HumanMessage("Proceed with relationship management."));
+  }
+  const response = await modelWithTools.invoke(irisMessages);
 
   if (response.content && typeof response.content === "string" && response.content.length > 50) {
     await storeMemory({

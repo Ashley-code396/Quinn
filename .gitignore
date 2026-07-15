@@ -39,3 +39,6 @@ coverage/
 # Docker volumes (local)
 pgdata/
 redisdata/
+
+# LangGraph API
+.langgraph_api

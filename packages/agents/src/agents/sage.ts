@@ -15,6 +15,7 @@ import {
   logAgentActionTool,
 } from "../tools/index.js";
 import { searchMemories, storeMemory } from "../memory/index.js";
+import { lastMessageType } from "../messages.js";
 
 const SAGE_CONTEXT = `
 # Research Priorities
@@ -54,7 +55,7 @@ export async function sageNode(
   state: QuinnStateType,
 ): Promise<Partial<QuinnStateType>> {
   const model = new ChatGroq({
-     model: "llama-3.3-70b-versatile",
+     model: "llama-3.1-8b-instant",
      temperature: 0.4,
    });
 
@@ -81,10 +82,14 @@ export async function sageNode(
   ]);
 
   // Run Sage's research cycle
-  const response = await modelWithTools.invoke([
+  const sageMessages = [
     new SystemMessage(systemPrompt),
-    ...state.messages.slice(-5), // Keep context manageable
-  ]);
+    ...state.messages.slice(-5),
+  ];
+  if (lastMessageType(sageMessages) !== "human") {
+    sageMessages.push(new HumanMessage("Proceed with research using the context above."));
+  }
+  const response = await modelWithTools.invoke(sageMessages);
 
   // Store key findings in memory
   if (response.content && typeof response.content === "string" && response.content.length > 50) {

@@ -2,11 +2,12 @@
  * Beacon — Analytics Agent
  */
 import { ChatGroq } from "@langchain/groq";
-import { SystemMessage, AIMessage } from "@langchain/core/messages";
+import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import type { QuinnStateType } from "../state.js";
 import { buildSystemPrompt } from "../prompts/system.js";
 import { getAnalyticsSnapshotsTool, getQuarterlyGoalsTool, logAgentActionTool } from "../tools/index.js";
 import { searchMemories, storeMemory } from "../memory/index.js";
+import { lastMessageType } from "../messages.js";
 
 const BEACON_CONTEXT = `
 # Analytics Responsibilities
@@ -32,10 +33,14 @@ export async function beaconNode(state: QuinnStateType): Promise<Partial<QuinnSt
     : "";
 
   const modelWithTools = model.bindTools([getAnalyticsSnapshotsTool, getQuarterlyGoalsTool, logAgentActionTool]);
-  const response = await modelWithTools.invoke([
+  const beaconMessages = [
     new SystemMessage(buildSystemPrompt("beacon", BEACON_CONTEXT + memCtx)),
     ...state.messages.slice(-5),
-  ]);
+  ];
+  if (lastMessageType(beaconMessages) !== "human") {
+    beaconMessages.push(new HumanMessage("Proceed with analytics review."));
+  }
+  const response = await modelWithTools.invoke(beaconMessages);
 
   if (response.content && typeof response.content === "string" && response.content.length > 50) {
     await storeMemory({ agentName: "BEACON", category: "analytics", content: response.content.slice(0, 2000), importance: 0.6 }).catch(() => {});

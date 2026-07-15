@@ -5,7 +5,7 @@
  * grants, accelerators, conferences, pilot customers.
  */
 import { ChatGroq } from "@langchain/groq";
-import { SystemMessage, AIMessage } from "@langchain/core/messages";
+import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import type { QuinnStateType } from "../state.js";
 import { buildSystemPrompt } from "../prompts/system.js";
 import {
@@ -15,6 +15,7 @@ import {
   logAgentActionTool,
 } from "../tools/index.js";
 import { searchMemories, storeMemory } from "../memory/index.js";
+import { lastMessageType } from "../messages.js";
 
 const ATLAS_CONTEXT = `
 # Opportunity Categories
@@ -46,7 +47,7 @@ export async function atlasNode(
   state: QuinnStateType,
 ): Promise<Partial<QuinnStateType>> {
   const model = new ChatGroq({
-     model: "llama-3.3-70b-versatile",
+     model: "llama-3.1-8b-instant",
      temperature: 0.3,
    });
   const lastMessage = state.messages[state.messages.length - 1];
@@ -71,10 +72,14 @@ export async function atlasNode(
     logAgentActionTool,
   ]);
 
-  const response = await modelWithTools.invoke([
+  const atlasMessages = [
     new SystemMessage(systemPrompt),
     ...state.messages.slice(-5),
-  ]);
+  ];
+  if (lastMessageType(atlasMessages) !== "human") {
+    atlasMessages.push(new HumanMessage("Proceed with growth opportunity analysis."));
+  }
+  const response = await modelWithTools.invoke(atlasMessages);
 
   if (response.content && typeof response.content === "string" && response.content.length > 50) {
     await storeMemory({

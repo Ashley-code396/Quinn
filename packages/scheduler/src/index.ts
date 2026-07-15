@@ -12,6 +12,7 @@ import {
   runDailyBriefing,
   runWeeklyReport,
   runWeeklyPriorities,
+  runQuarterlyPlanning,
 } from "@quinn/agents";
 import type { QuinnGraph } from "@quinn/agents";
 
@@ -93,6 +94,9 @@ export async function createWorker(redisUrl?: string) {
             break;
           case "weekly-priorities":
             await runWeeklyPriorities(graph);
+            break;
+          case "quarterly-planning":
+            await runQuarterlyPlanning(graph);
             break;
           default:
             console.warn(`Unknown workflow: ${job.data.workflow}`);

@@ -122,6 +122,52 @@ Produce a ranked list of this week's top 5 priorities with clear owners and dead
 }
 
 /**
+ * Quarterly Planning Workflow
+ */
+export async function runQuarterlyPlanning(graph: QuinnGraph, threadId?: string) {
+  const quarter = getCurrentQuarter();
+  const config = {
+    configurable: {
+      thread_id: threadId ?? `quarterly-planning-${Date.now()}`,
+    },
+  };
+
+  const result = await graph.invoke(
+    {
+      trigger: "quarterly-planning",
+      messages: [
+        new HumanMessage({
+          content: `Quinn, it's time for ${quarter} quarterly planning.
+
+Please coordinate with all agents to produce a comprehensive quarterly marketing plan:
+
+1. Review what we accomplished last quarter (ask Beacon for analytics)
+2. Evaluate our current position and market landscape (ask Sage)
+3. Define ${quarter} objectives and key results
+4. Plan the content strategy for the quarter (ask Nova)
+5. Identify growth targets — partnerships, grants, pilots (ask Atlas)
+6. Assess our relationship pipeline and who we need to engage (ask Iris)
+7. Determine what assets and materials we need to prepare (ask Helix)
+8. Synthesize everything into a clear quarterly strategy document
+
+Include for each proposed OKR:
+- The objective and 3-5 measurable key results
+- Strategic rationale
+- Resource requirements
+- Timeline and milestones
+- Success criteria
+
+Be ambitious but realistic given our early-stage constraints.`,
+        }),
+      ],
+    },
+    config,
+  );
+
+  return result;
+}
+
+/**
  * Ad-hoc chat with Quinn
  */
 export async function chatWithQuinn(

@@ -14,6 +14,7 @@ import { MAX_ITERATIONS } from "../state.js";
 import { buildSystemPrompt } from "../prompts/system.js";
 import { searchMemories } from "../memory/index.js";
 import { getCurrentQuarter } from "@quinn/shared";
+import { lastMessageType } from "../messages.js";
 
 const QUINN_ADDITIONAL_CONTEXT = `
 # Your Daily Responsibilities
@@ -112,10 +113,15 @@ export async function quinnNode(
 
   const structured = model.withStructuredOutput(routingSchema);
 
-  const result = await structured.invoke([
+  const messagesForModel = [
     new SystemMessage(systemPrompt),
     ...state.messages,
-  ]);
+  ];
+  if (lastMessageType(messagesForModel) !== "human") {
+    messagesForModel.push(new HumanMessage("Continue with your analysis and decide what to do next."));
+  }
+
+  const result = await structured.invoke(messagesForModel);
 
   return {
     next: result.nextAgent,

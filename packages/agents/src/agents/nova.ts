@@ -6,7 +6,7 @@
  */
 
 import { ChatGroq } from "@langchain/groq";
-import { SystemMessage, AIMessage } from "@langchain/core/messages";
+import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import type { QuinnStateType } from "../state.js";
 import { buildSystemPrompt } from "../prompts/system.js";
 import {
@@ -16,6 +16,7 @@ import {
   logAgentActionTool,
 } from "../tools/index.js";
 import { searchMemories, storeMemory } from "../memory/index.js";
+import { lastMessageType } from "../messages.js";
 
 const NOVA_CONTEXT = `
 # Content Pillars
@@ -50,7 +51,7 @@ export async function novaNode(
   state: QuinnStateType,
 ): Promise<Partial<QuinnStateType>> {
   const model = new ChatGroq({
-     model: "llama-3.3-70b-versatile",
+     model: "llama-3.1-8b-instant",
      temperature: 0.7,
    });
 
@@ -78,10 +79,14 @@ export async function novaNode(
     logAgentActionTool,
   ]);
 
-  const response = await modelWithTools.invoke([
+  const novaMessages = [
     new SystemMessage(systemPrompt),
     ...state.messages.slice(-5),
-  ]);
+  ];
+  if (lastMessageType(novaMessages) !== "human") {
+    novaMessages.push(new HumanMessage("Proceed with content generation using the context above."));
+  }
+  const response = await modelWithTools.invoke(novaMessages);
 
   // Store content ideas in memory for deduplication
   if (response.content && typeof response.content === "string" && response.content.length > 50) {

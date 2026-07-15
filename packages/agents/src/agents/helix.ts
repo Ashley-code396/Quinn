@@ -3,11 +3,12 @@
  */
 
 import { ChatGroq } from "@langchain/groq";
-import { SystemMessage, AIMessage } from "@langchain/core/messages";
+import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import type { QuinnStateType } from "../state.js";
 import { buildSystemPrompt } from "../prompts/system.js";
 import { createApprovalTool, logAgentActionTool } from "../tools/index.js";
 import { searchMemories, storeMemory } from "../memory/index.js";
+import { lastMessageType } from "../messages.js";
 
 const HELIX_CONTEXT = `
 # Asset Types
@@ -33,10 +34,14 @@ export async function helixNode(state: QuinnStateType): Promise<Partial<QuinnSta
     : "";
 
   const modelWithTools = model.bindTools([createApprovalTool, logAgentActionTool]);
-  const response = await modelWithTools.invoke([
+  const helixMessages = [
     new SystemMessage(buildSystemPrompt("helix", HELIX_CONTEXT + memCtx)),
     ...state.messages.slice(-5),
-  ]);
+  ];
+  if (lastMessageType(helixMessages) !== "human") {
+    helixMessages.push(new HumanMessage("Proceed with marketing materials preparation."));
+  }
+  const response = await modelWithTools.invoke(helixMessages);
 
   if (response.content && typeof response.content === "string" && response.content.length > 50) {
     await storeMemory({ agentName: "HELIX", category: "materials", content: response.content.slice(0, 2000), importance: 0.5 }).catch(() => {});
