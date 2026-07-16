@@ -47,7 +47,7 @@ export async function atlasNode(
   state: QuinnStateType,
 ): Promise<Partial<QuinnStateType>> {
   const model = new ChatGroq({
-     model: "llama-3.1-8b-instant",
+      model: "meta-llama/llama-4-scout-17b-16e-instruct",
      temperature: 0.3,
    });
   const lastMessage = state.messages[state.messages.length - 1];
@@ -79,13 +79,32 @@ export async function atlasNode(
   if (lastMessageType(atlasMessages) !== "human") {
     atlasMessages.push(new HumanMessage("Proceed with growth opportunity analysis."));
   }
-  const response = await modelWithTools.invoke(atlasMessages);
+  let response = await modelWithTools.invoke(atlasMessages);
 
-  if (response.content && typeof response.content === "string" && response.content.length > 50) {
+  const atlasTools = [getOpportunitiesTool, searchOrganizationsTool, createApprovalTool, logAgentActionTool];
+
+  if (response.tool_calls?.length && !response.content?.toString().trim()) {
+    const toolResults: string[] = [];
+    for (const tc of response.tool_calls) {
+      const tool = atlasTools.find(t => t.name === tc.name);
+      if (tool) {
+        const result = await tool.invoke(tc.args as Record<string, unknown>);
+        toolResults.push(`${tc.name} returned:\n${typeof result === "string" ? result.slice(0, 2000) : JSON.stringify(result).slice(0, 2000)}`);
+      }
+    }
+    const followUp = new HumanMessage(
+      `Tool results:\n\n${toolResults.join("\n\n")}\n\nSummarize your growth analysis findings based on these results.`
+    );
+    response = await model.invoke([...atlasMessages, response, followUp]);
+  }
+
+  const atlasContent = response.content?.toString()?.trim() || "Growth analysis complete with opportunity evaluation.";
+
+  if (atlasContent.length > 50) {
     await storeMemory({
       agentName: "ATLAS",
       category: "opportunities",
-      content: response.content.slice(0, 2000),
+      content: atlasContent.slice(0, 2000),
       importance: 0.6,
     }).catch(() => {});
   }
@@ -94,7 +113,7 @@ export async function atlasNode(
     next: "quinn",
     messages: [
       new AIMessage({
-        content: response.content?.toString() ?? "Growth analysis complete.",
+        content: atlasContent,
         name: "atlas",
       }),
     ],
@@ -102,7 +121,7 @@ export async function atlasNode(
       {
         agentName: "atlas",
         summary: "Growth & business development report",
-        findings: [response.content?.toString()?.slice(0, 500) ?? "No opportunities found"],
+        findings: [atlasContent.slice(0, 500)],
         recommendations: [],
         actionItems: [],
         timestamp: new Date(),

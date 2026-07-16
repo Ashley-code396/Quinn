@@ -22,7 +22,7 @@ Submit all materials for approval before sharing.
 
 export async function helixNode(state: QuinnStateType): Promise<Partial<QuinnStateType>> {
    const model = new ChatGroq({
-      model: "llama-3.1-8b-instant",
+      model: "meta-llama/llama-4-scout-17b-16e-instruct",
       temperature: 0.3,
     });
   const lastMessage = state.messages[state.messages.length - 1];
@@ -41,15 +41,34 @@ export async function helixNode(state: QuinnStateType): Promise<Partial<QuinnSta
   if (lastMessageType(helixMessages) !== "human") {
     helixMessages.push(new HumanMessage("Proceed with marketing materials preparation."));
   }
-  const response = await modelWithTools.invoke(helixMessages);
+  let response = await modelWithTools.invoke(helixMessages);
 
-  if (response.content && typeof response.content === "string" && response.content.length > 50) {
-    await storeMemory({ agentName: "HELIX", category: "materials", content: response.content.slice(0, 2000), importance: 0.5 }).catch(() => {});
+  const helixTools = [createApprovalTool, logAgentActionTool];
+
+  if (response.tool_calls?.length && !response.content?.toString().trim()) {
+    const toolResults: string[] = [];
+    for (const tc of response.tool_calls) {
+      const tool = helixTools.find(t => t.name === tc.name);
+      if (tool) {
+        const result = await tool.invoke(tc.args as Record<string, unknown>);
+        toolResults.push(`${tc.name} returned:\n${typeof result === "string" ? result.slice(0, 2000) : JSON.stringify(result).slice(0, 2000)}`);
+      }
+    }
+    const followUp = new HumanMessage(
+      `Tool results:\n\n${toolResults.join("\n\n")}\n\nSummarize your findings based on these results.`
+    );
+    response = await model.invoke([...helixMessages, response, followUp]);
+  }
+
+  const helixContent = response.content?.toString()?.trim() || "Asset preparation complete.";
+
+  if (helixContent.length > 50) {
+    await storeMemory({ agentName: "HELIX", category: "materials", content: helixContent.slice(0, 2000), importance: 0.5 }).catch(() => {});
   }
 
   return {
     next: "quinn",
-    messages: [new AIMessage({ content: response.content?.toString() ?? "Asset preparation complete.", name: "helix" })],
-    agentReports: [{ agentName: "helix", summary: "Presentation & asset report", findings: [response.content?.toString()?.slice(0, 500) ?? "No assets generated"], recommendations: [], actionItems: [], timestamp: new Date() }],
+    messages: [new AIMessage({ content: helixContent, name: "helix" })],
+    agentReports: [{ agentName: "helix", summary: "Presentation & asset report", findings: [helixContent.slice(0, 500)], recommendations: [], actionItems: [], timestamp: new Date() }],
   };
 }

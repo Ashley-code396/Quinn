@@ -21,7 +21,7 @@ Flag metrics that are behind target as risks.
 
 export async function beaconNode(state: QuinnStateType): Promise<Partial<QuinnStateType>> {
    const model = new ChatGroq({
-      model: "llama-3.1-8b-instant",
+      model: "meta-llama/llama-4-scout-17b-16e-instruct",
       temperature: 0.2,
     });
   const lastMessage = state.messages[state.messages.length - 1];
@@ -40,15 +40,34 @@ export async function beaconNode(state: QuinnStateType): Promise<Partial<QuinnSt
   if (lastMessageType(beaconMessages) !== "human") {
     beaconMessages.push(new HumanMessage("Proceed with analytics review."));
   }
-  const response = await modelWithTools.invoke(beaconMessages);
+  let response = await modelWithTools.invoke(beaconMessages);
 
-  if (response.content && typeof response.content === "string" && response.content.length > 50) {
-    await storeMemory({ agentName: "BEACON", category: "analytics", content: response.content.slice(0, 2000), importance: 0.6 }).catch(() => {});
+  const beaconTools = [getAnalyticsSnapshotsTool, getQuarterlyGoalsTool, logAgentActionTool];
+
+  if (response.tool_calls?.length && !response.content?.toString().trim()) {
+    const toolResults: string[] = [];
+    for (const tc of response.tool_calls) {
+      const tool = beaconTools.find(t => t.name === tc.name);
+      if (tool) {
+        const result = await tool.invoke(tc.args as Record<string, unknown>);
+        toolResults.push(`${tc.name} returned:\n${typeof result === "string" ? result.slice(0, 2000) : JSON.stringify(result).slice(0, 2000)}`);
+      }
+    }
+    const followUp = new HumanMessage(
+      `Tool results:\n\n${toolResults.join("\n\n")}\n\nSummarize your analytics findings based on these results.`
+    );
+    response = await model.invoke([...beaconMessages, response, followUp]);
+  }
+
+  const beaconContent = response.content?.toString()?.trim() || "Analytics review complete.";
+
+  if (beaconContent.length > 50) {
+    await storeMemory({ agentName: "BEACON", category: "analytics", content: beaconContent.slice(0, 2000), importance: 0.6 }).catch(() => {});
   }
 
   return {
     next: "quinn",
-    messages: [new AIMessage({ content: response.content?.toString() ?? "Analytics review complete.", name: "beacon" })],
-    agentReports: [{ agentName: "beacon", summary: "Analytics & performance report", findings: [response.content?.toString()?.slice(0, 500) ?? "No data"], recommendations: [], actionItems: [], timestamp: new Date() }],
+    messages: [new AIMessage({ content: beaconContent, name: "beacon" })],
+    agentReports: [{ agentName: "beacon", summary: "Analytics & performance report", findings: [beaconContent.slice(0, 500)], recommendations: [], actionItems: [], timestamp: new Date() }],
   };
 }

@@ -30,9 +30,9 @@ const QUINN_ADDITIONAL_CONTEXT = `
 10. Present a clear executive briefing.
 
 # Delegation Rules
-- Delegate to "sage" for research on companies, competitors, industry trends.
+- Delegate to "sage" for industry research, competitor analysis, market trends, counterfeit landscape.
 - Delegate to "nova" for content creation, calendar planning, thought leadership.
-- Delegate to "atlas" for growth opportunities, partnerships, grants, conferences.
+- Delegate to "atlas" for identifying enterprise prospects, evaluating pilot customers, partnerships, grants, and conferences. Atlas evaluates and scores opportunities — use Atlas when you need to rank companies by strategic fit.
 - Delegate to "iris" for relationship management, follow-ups, CRM updates.
 - Delegate to "helix" for pitch decks, presentations, marketing materials.
 - Delegate to "beacon" for analytics, KPI tracking, performance reports.

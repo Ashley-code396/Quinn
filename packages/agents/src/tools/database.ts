@@ -31,7 +31,7 @@ export const searchOrganizationsTool = tool(
         ],
       },
       orderBy: { priorityScore: "desc" },
-      take: limit ?? 10,
+      take: toNumber(limit) ?? 10,
     });
     return JSON.stringify(orgs, null, 2);
   },
@@ -43,7 +43,7 @@ export const searchOrganizationsTool = tool(
       query: z.string().optional().describe("Search query for name, industry, or notes"),
       industry: z.string().optional().describe("Filter by industry"),
       status: z.string().optional().describe("Filter by outreach status"),
-      limit: z.number().optional().describe("Max results to return (default 10)"),
+      limit: z.union([z.number(), z.string()]).optional().describe("Max results to return (default 10)"),
     }),
   },
 );
@@ -53,7 +53,11 @@ export const searchOrganizationsTool = tool(
  */
 export const upsertOrganizationTool = tool(
   async (params) => {
-    const { id, ...data } = params;
+    const { id, priorityScore, ...rest } = params;
+    const data = {
+      ...rest,
+      ...(priorityScore != null && { priorityScore: toNumber(priorityScore) }),
+    };
     let org;
     if (id) {
       org = await prisma.organization.update({
@@ -94,7 +98,7 @@ export const upsertOrganizationTool = tool(
       recentNews: z.string().optional(),
       dermaqeaRelevance: z.string().optional(),
       partnershipPotential: z.string().optional(),
-      priorityScore: z.number().optional(),
+      priorityScore: z.union([z.number(), z.string()]).optional(),
       researchNotes: z.string().optional(),
       tags: z.array(z.string()).optional(),
     }),
@@ -109,7 +113,7 @@ export const getPendingApprovalsTool = tool(
     const approvals = await prisma.approval.findMany({
       where: { status: "PENDING" },
       orderBy: [{ priority: "asc" }, { createdAt: "desc" }],
-      take: limit ?? 20,
+      take: toNumber(limit) ?? 20,
     });
     return JSON.stringify(approvals, null, 2);
   },
@@ -117,7 +121,7 @@ export const getPendingApprovalsTool = tool(
     name: "get_pending_approvals",
     description: "Get all pending approval requests that need human review.",
     schema: z.object({
-      limit: z.number().optional().describe("Max results (default 20)"),
+      limit: z.union([z.number(), z.string()]).optional().describe("Max results (default 20)"),
     }),
   },
 );
@@ -127,8 +131,16 @@ export const getPendingApprovalsTool = tool(
  */
 export const createApprovalTool = tool(
   async (params) => {
+    const data = {
+      ...params,
+      type: asEnum(params.type, APPROVAL_TYPES, "OTHER"),
+      priority: asEnum(params.priority, PRIORITIES, "MEDIUM"),
+      effort: asEnum(params.effort, EFFORTS, "MEDIUM"),
+      agentName: asEnum(params.agentName?.toUpperCase(), AGENT_NAMES, "QUINN"),
+      confidence: toNumber(params.confidence as never),
+    };
     const approval = await prisma.approval.create({
-      data: params as never,
+      data: data as never,
     });
     return JSON.stringify(approval, null, 2);
   },
@@ -146,7 +158,7 @@ export const createApprovalTool = tool(
       reasoning: z.string().describe("Why Quinn recommends this"),
       impact: z.string().describe("Expected business impact"),
       effort: z.string().describe("LOW, MEDIUM, or HIGH"),
-      confidence: z.number().describe("Confidence score 0-100"),
+      confidence: z.union([z.number(), z.string()]).describe("Confidence score 0-100"),
       metrics: z.array(z.string()).describe("Success measurement criteria"),
     }),
   },
@@ -184,7 +196,7 @@ export const getContentItemsTool = tool(
         ...(status && { status: status as never }),
       },
       orderBy: { createdAt: "desc" },
-      take: limit ?? 20,
+      take: toNumber(limit) ?? 20,
     });
     return JSON.stringify(items, null, 2);
   },
@@ -194,7 +206,7 @@ export const getContentItemsTool = tool(
     schema: z.object({
       type: z.string().optional().describe("Content type filter"),
       status: z.string().optional().describe("Content status filter"),
-      limit: z.number().optional().describe("Max results"),
+      limit: z.union([z.number(), z.string()]).optional().describe("Max results"),
     }),
   },
 );
@@ -229,7 +241,7 @@ export const createContentItemTool = tool(
 export const getFollowUpsDueTool = tool(
   async ({ daysAhead }) => {
     const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() + (daysAhead ?? 7));
+    cutoff.setDate(cutoff.getDate() + toNumber(daysAhead) ?? 7);
     const relationships = await prisma.relationship.findMany({
       where: {
         nextFollowUp: { lte: cutoff },
@@ -247,7 +259,7 @@ export const getFollowUpsDueTool = tool(
     name: "get_followups_due",
     description: "Get relationships with follow-ups due within the specified number of days.",
     schema: z.object({
-      daysAhead: z.number().optional().describe("Days ahead to check (default 7)"),
+      daysAhead: z.union([z.number(), z.string()]).optional().describe("Days ahead to check (default 7)"),
     }),
   },
 );
@@ -266,7 +278,7 @@ export const getOpportunitiesTool = tool(
         organization: { select: { name: true, id: true } },
       },
       orderBy: { probability: "desc" },
-      take: limit ?? 20,
+      take: toNumber(limit) ?? 20,
     });
     return JSON.stringify(opportunities, null, 2);
   },
@@ -276,10 +288,23 @@ export const getOpportunitiesTool = tool(
     schema: z.object({
       type: z.string().optional(),
       status: z.string().optional(),
-      limit: z.number().optional(),
+      limit: z.union([z.number(), z.string()]).optional(),
     }),
   },
 );
+
+const APPROVAL_TYPES = ["EMAIL", "LINKEDIN_POST", "BLOG_POST", "PARTNERSHIP_PROPOSAL", "GRANT_APPLICATION", "INVESTOR_OUTREACH", "CONFERENCE_REGISTRATION", "PITCH_DECK", "NEWSLETTER", "SOCIAL_MEDIA", "WHITEPAPER", "PRESS_RELEASE", "OTHER"] as const;
+const PRIORITIES = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
+const EFFORTS = ["LOW", "MEDIUM", "HIGH"] as const;
+const AGENT_NAMES = ["QUINN", "SAGE", "NOVA", "ATLAS", "IRIS", "HELIX", "BEACON"] as const;
+
+function toNumber(v: string | number | undefined): number | undefined {
+  return v != null ? Number(v) : undefined;
+}
+
+function asEnum<T extends string>(val: string, valid: readonly T[], fallback: T): T {
+  return valid.includes(val as T) ? (val as T) : fallback;
+}
 
 /**
  * Log an agent action for audit trail.
@@ -316,7 +341,7 @@ export const getAnalyticsSnapshotsTool = tool(
     const snapshots = await prisma.analyticsSnapshot.findMany({
       where: period ? { period } : undefined,
       orderBy: { date: "desc" },
-      take: limit ?? 10,
+      take: toNumber(limit) ?? 10,
     });
     return JSON.stringify(snapshots, null, 2);
   },
@@ -325,7 +350,7 @@ export const getAnalyticsSnapshotsTool = tool(
     description: "Get analytics snapshots for tracking performance over time.",
     schema: z.object({
       period: z.string().optional().describe("'daily', 'weekly', or 'monthly'"),
-      limit: z.number().optional(),
+      limit: z.union([z.number(), z.string()]).optional(),
     }),
   },
 );

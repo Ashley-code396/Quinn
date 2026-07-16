@@ -49,7 +49,7 @@ export async function irisNode(
   state: QuinnStateType,
 ): Promise<Partial<QuinnStateType>> {
    const model = new ChatGroq({
-      model: "llama-3.1-8b-instant",
+      model: "meta-llama/llama-4-scout-17b-16e-instruct",
       temperature: 0.2,
     });
   const lastMessage = state.messages[state.messages.length - 1];
@@ -81,13 +81,32 @@ export async function irisNode(
   if (lastMessageType(irisMessages) !== "human") {
     irisMessages.push(new HumanMessage("Proceed with relationship management."));
   }
-  const response = await modelWithTools.invoke(irisMessages);
+  let response = await modelWithTools.invoke(irisMessages);
 
-  if (response.content && typeof response.content === "string" && response.content.length > 50) {
+  const irisTools = [getFollowUpsDueTool, searchOrganizationsTool, createApprovalTool, logAgentActionTool];
+
+  if (response.tool_calls?.length && !response.content?.toString().trim()) {
+    const toolResults: string[] = [];
+    for (const tc of response.tool_calls) {
+      const tool = irisTools.find(t => t.name === tc.name);
+      if (tool) {
+        const result = await tool.invoke(tc.args as Record<string, unknown>);
+        toolResults.push(`${tc.name} returned:\n${typeof result === "string" ? result.slice(0, 2000) : JSON.stringify(result).slice(0, 2000)}`);
+      }
+    }
+    const followUp = new HumanMessage(
+      `Tool results:\n\n${toolResults.join("\n\n")}\n\nSummarize your relationship management findings based on these results.`
+    );
+    response = await model.invoke([...irisMessages, response, followUp]);
+  }
+
+  const irisContent = response.content?.toString()?.trim() || "Relationship check complete.";
+
+  if (irisContent.length > 50) {
     await storeMemory({
       agentName: "IRIS",
       category: "relationships",
-      content: response.content.slice(0, 2000),
+      content: irisContent.slice(0, 2000),
       importance: 0.6,
     }).catch(() => {});
   }
@@ -96,7 +115,7 @@ export async function irisNode(
     next: "quinn",
     messages: [
       new AIMessage({
-        content: response.content?.toString() ?? "Relationship check complete.",
+        content: irisContent,
         name: "iris",
       }),
     ],
@@ -104,7 +123,7 @@ export async function irisNode(
       {
         agentName: "iris",
         summary: "Relationship management report",
-        findings: [response.content?.toString()?.slice(0, 500) ?? "No follow-ups due"],
+        findings: [irisContent.slice(0, 500)],
         recommendations: [],
         actionItems: [],
         timestamp: new Date(),

@@ -55,7 +55,7 @@ export async function sageNode(
   state: QuinnStateType,
 ): Promise<Partial<QuinnStateType>> {
   const model = new ChatGroq({
-     model: "llama-3.1-8b-instant",
+      model: "meta-llama/llama-4-scout-17b-16e-instruct",
      temperature: 0.4,
    });
 
@@ -89,23 +89,41 @@ export async function sageNode(
   if (lastMessageType(sageMessages) !== "human") {
     sageMessages.push(new HumanMessage("Proceed with research using the context above."));
   }
-  const response = await modelWithTools.invoke(sageMessages);
+  let response = await modelWithTools.invoke(sageMessages);
 
-  // Store key findings in memory
-  if (response.content && typeof response.content === "string" && response.content.length > 50) {
+  const sageTools = [searchOrganizationsTool, upsertOrganizationTool, logAgentActionTool];
+
+  if (response.tool_calls?.length && !response.content?.toString().trim()) {
+    const toolResults: string[] = [];
+    for (const tc of response.tool_calls) {
+      const tool = sageTools.find(t => t.name === tc.name);
+      if (tool) {
+        const result = await tool.invoke(tc.args as Record<string, unknown>);
+        toolResults.push(`${tc.name} returned:\n${typeof result === "string" ? result.slice(0, 2000) : JSON.stringify(result).slice(0, 2000)}`);
+      }
+    }
+    const followUp = new HumanMessage(
+      `Tool results:\n\n${toolResults.join("\n\n")}\n\nSummarize your research findings based on these results.`
+    );
+    response = await model.invoke([...sageMessages, response, followUp]);
+  }
+
+  const sageContent = response.content?.toString()?.trim() || "Research cycle complete. No new findings at this time.";
+
+  if (sageContent.length > 50) {
     await storeMemory({
       agentName: "SAGE",
       category: "research",
-      content: response.content.slice(0, 2000),
+      content: sageContent.slice(0, 2000),
       importance: 0.6,
-    }).catch(() => {}); // Non-critical
+    }).catch(() => {});
   }
 
   return {
     next: "quinn",
     messages: [
       new AIMessage({
-        content: response.content?.toString() ?? "Research cycle complete. No new findings at this time.",
+        content: sageContent,
         name: "sage",
       }),
     ],
@@ -113,7 +131,7 @@ export async function sageNode(
       {
         agentName: "sage",
         summary: "Research intelligence report",
-        findings: [response.content?.toString()?.slice(0, 500) ?? "No findings"],
+        findings: [sageContent.slice(0, 500)],
         recommendations: [],
         actionItems: [],
         timestamp: new Date(),

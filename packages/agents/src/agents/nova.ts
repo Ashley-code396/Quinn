@@ -21,7 +21,7 @@ import { lastMessageType } from "../messages.js";
 const NOVA_CONTEXT = `
 # Content Pillars
 1. **Counterfeit Awareness** — Statistics, case studies, consumer risk
-2. **Authentication Technology** — How invisible crypto works, comparisons
+2. **Authentication Technology** — How invisible cryptographic signatures works, comparisons
 3. **Brand Trust** — Why authenticity matters for brand loyalty
 4. **Industry Insights** — Skincare market trends, regulation changes
 5. **Founder Journey** — Building in public, milestones, lessons
@@ -51,7 +51,7 @@ export async function novaNode(
   state: QuinnStateType,
 ): Promise<Partial<QuinnStateType>> {
   const model = new ChatGroq({
-     model: "llama-3.1-8b-instant",
+      model: "meta-llama/llama-4-scout-17b-16e-instruct",
      temperature: 0.7,
    });
 
@@ -86,14 +86,32 @@ export async function novaNode(
   if (lastMessageType(novaMessages) !== "human") {
     novaMessages.push(new HumanMessage("Proceed with content generation using the context above."));
   }
-  const response = await modelWithTools.invoke(novaMessages);
+  let response = await modelWithTools.invoke(novaMessages);
 
-  // Store content ideas in memory for deduplication
-  if (response.content && typeof response.content === "string" && response.content.length > 50) {
+  const novaTools = [getContentItemsTool, createContentItemTool, createApprovalTool, logAgentActionTool];
+
+  if (response.tool_calls?.length && !response.content?.toString().trim()) {
+    const toolResults: string[] = [];
+    for (const tc of response.tool_calls) {
+      const tool = novaTools.find(t => t.name === tc.name);
+      if (tool) {
+        const result = await tool.invoke(tc.args as Record<string, unknown>);
+        toolResults.push(`${tc.name} returned:\n${typeof result === "string" ? result.slice(0, 2000) : JSON.stringify(result).slice(0, 2000)}`);
+      }
+    }
+    const followUp = new HumanMessage(
+      `Tool results:\n\n${toolResults.join("\n\n")}\n\nSummarize your content findings based on these results.`
+    );
+    response = await model.invoke([...novaMessages, response, followUp]);
+  }
+
+  const novaContent = response.content?.toString()?.trim() || "Content generation cycle complete.";
+
+  if (novaContent.length > 50) {
     await storeMemory({
       agentName: "NOVA",
       category: "content_context",
-      content: response.content.slice(0, 2000),
+      content: novaContent.slice(0, 2000),
       importance: 0.5,
     }).catch(() => {});
   }
@@ -102,7 +120,7 @@ export async function novaNode(
     next: "quinn",
     messages: [
       new AIMessage({
-        content: response.content?.toString() ?? "Content generation cycle complete.",
+        content: novaContent,
         name: "nova",
       }),
     ],
@@ -110,7 +128,7 @@ export async function novaNode(
       {
         agentName: "nova",
         summary: "Content marketing report",
-        findings: [response.content?.toString()?.slice(0, 500) ?? "No content generated"],
+        findings: [novaContent.slice(0, 500)],
         recommendations: [],
         actionItems: [],
         timestamp: new Date(),
