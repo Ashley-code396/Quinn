@@ -10,6 +10,7 @@ import type { Context } from "telegraf";
 import { prisma } from "@quinn/database";
 import type { QuinnGraph } from "../graph.js";
 import { chatWithQuinn } from "../workflows/index.js";
+import { processKnowledge } from "../knowledge/pipeline.js";
 
 
 
@@ -351,7 +352,36 @@ _Quinn also sends daily briefings at 8 AM and alerts as they happen._`,
     }
   });
 
-  // ---- /ask <question> ----
+  // ---- /knowledge <query> — search captured knowledge ----
+  bot.command("knowledge", async (ctx) => {
+    const query = ctx.message.text.split(" ").slice(1).join(" ").trim();
+    if (!query) {
+      await ctx.reply("Usage: /knowledge <search query>\nSearch through everything I've learned.");
+      return;
+    }
+    try {
+      const { searchMemories } = await import("../memory/index.js");
+      const results = await searchMemories({ query, limit: 6 });
+      if (results.length === 0) {
+        await ctx.reply("No relevant memories found.");
+        return;
+      }
+      const lines = ["📚 *Knowledge Search Results*", ""];
+      for (const r of results) {
+        const age = Math.round((Date.now() - r.createdAt.getTime()) / 86400000);
+        lines.push(
+          `[${r.category}] (${Math.round(r.similarity * 100)}% match, ${age}d ago)`,
+          `> ${r.content.slice(0, 300)}`,
+          "",
+        );
+      }
+      await ctx.reply(lines.join("\n"), { parse_mode: "Markdown" });
+    } catch (error) {
+      await ctx.reply(`❌ Error: ${(error as Error).message}`);
+    }
+  });
+
+  // ---- /ask <question> — explicit question, no knowledge capture ----
   bot.command("ask", async (ctx) => {
     const question = ctx.message.text.split(" ").slice(1).join(" ").trim();
     if (!question) {
@@ -376,20 +406,77 @@ _Quinn also sends daily briefings at 8 AM and alerts as they happen._`,
     await ctx.reply("pong");
   });
 
-  // ---- Fallback: treat any text as an ask ----
+  // ---- Knowledge Inbox: any text is captured and processed ----
   bot.on("text", async (ctx) => {
     const text = ctx.message.text.trim();
     if (text.startsWith("/")) return;
 
-    await ctx.reply("🤔 Processing your request...");
+    // Small messages (<15 chars) are likely casual conversation, not knowledge
+    if (text.length < 15) {
+      await ctx.reply("Got it! Send me anything longer — ideas, notes, links, anything you want me to remember and act on.");
+      return;
+    }
+
+    const statusMsg = await ctx.reply("🧠 Processing your input...");
 
     try {
-      const result = await chatWithQuinn(graph, text);
-      const lastMessage = result.messages[result.messages.length - 1];
-      const answer = lastMessage?.content?.toString() ?? "No response generated.";
-      await ctx.reply(answer.slice(0, 4000), { parse_mode: "Markdown" });
+      const result = await processKnowledge(text, "telegram");
+
+      const categoryEmoji: Record<string, string> = {
+        opportunity: "🎯",
+        marketing: "📣",
+        product: "🔧",
+        competitor: "👁",
+        customer: "👤",
+        founder_insight: "💡",
+        research: "📚",
+        general: "📌",
+      };
+
+      const icon = categoryEmoji[result.classification.category] ?? "📌";
+      const urgency = result.classification.isUrgent ? " 🚨" : "";
+
+      let reply = `${icon} *Knowledge Captured*${urgency}\n`;
+      reply += `_${result.classification.summary}_\n\n`;
+
+      if (result.tasks.length > 0) {
+        reply += "*Tasks Created:*\n";
+        for (const t of result.tasks) {
+          const p = t.priority === "critical" ? "🔴" : t.priority === "high" ? "🟠" : "🟡";
+          reply += `${p} *${t.agent}*: ${t.action}\n`;
+        }
+        reply += "\n";
+      }
+
+      const strategyChange = result.strategicImpact.strategyChange as string;
+      if (strategyChange && strategyChange !== "none") {
+        const emoji = strategyChange === "significant" ? "🔴" : "🟡";
+        reply += `${emoji} *Strategy Impact:* ${strategyChange} change\n`;
+        reply += `${result.strategicImpact.strategyChangeReason}\n\n`;
+      }
+
+      reply += `_Importance: ${Math.round(result.classification.importance * 100)}%_`;
+
+      await ctx.telegram.editMessageText(
+        ctx.chat.id,
+        statusMsg.message_id,
+        undefined,
+        reply,
+        { parse_mode: "Markdown" },
+      );
+
+      // If urgent, also run through Quinn for immediate attention
+      if (result.classification.isUrgent) {
+        await ctx.reply("🚨 This seems urgent. Let me evaluate it right away...");
+        const quinnResult = await chatWithQuinn(graph, `URGENT: ${result.classification.summary}\n\nContext: ${text}`);
+        const answer = quinnResult.messages[quinnResult.messages.length - 1]?.content?.toString() ?? "";
+        if (answer) {
+          await ctx.reply(answer.slice(0, 4000), { parse_mode: "Markdown" });
+        }
+      }
     } catch (error) {
-      await ctx.reply(`❌ Error: ${(error as Error).message}`);
+      console.error("❌ Knowledge pipeline error:", error);
+      await ctx.reply("I ran into an issue processing that. Please try again.");
     }
   });
 

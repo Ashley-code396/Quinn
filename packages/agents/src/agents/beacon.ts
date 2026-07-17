@@ -27,9 +27,9 @@ export async function beaconNode(state: QuinnStateType): Promise<Partial<QuinnSt
   const lastMessage = state.messages[state.messages.length - 1];
   const taskDesc = lastMessage?.content?.toString() ?? "analyze marketing performance";
 
-  const memories = await searchMemories({ query: taskDesc, agentName: "BEACON", limit: 5 });
+  const memories = await searchMemories({ query: taskDesc, limit: 8 });
   const memCtx = memories.length > 0
-    ? `\n# Previous Analytics\n${memories.map((m) => `- ${m.content}`).join("\n")}`
+    ? `\n# Relevant Knowledge & Previous Analytics\n${memories.map((m) => `[${m.category}] ${m.content}`).join("\n")}`
     : "";
 
   const modelWithTools = model.bindTools([searchWebTool, getAnalyticsSnapshotsTool, getQuarterlyGoalsTool, logAgentActionTool]);

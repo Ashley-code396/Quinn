@@ -57,12 +57,11 @@ export async function irisNode(
 
   const relevantMemories = await searchMemories({
     query: taskDescription,
-    agentName: "IRIS",
-    limit: 5,
+    limit: 8,
   });
 
   const memoryContext = relevantMemories.length > 0
-    ? `\n# Relationship History\n${relevantMemories.map((m) => `- ${m.content}`).join("\n")}`
+    ? `\n# Relevant Knowledge & Relationship History\n${relevantMemories.map((m) => `[${m.category}] ${m.content}`).join("\n")}`
     : "";
 
   const systemPrompt = buildSystemPrompt("iris", IRIS_CONTEXT + memoryContext);

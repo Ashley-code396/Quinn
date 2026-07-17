@@ -28,9 +28,9 @@ export async function helixNode(state: QuinnStateType): Promise<Partial<QuinnSta
   const lastMessage = state.messages[state.messages.length - 1];
   const taskDesc = lastMessage?.content?.toString() ?? "prepare marketing materials";
 
-  const memories = await searchMemories({ query: taskDesc, agentName: "HELIX", limit: 5 });
+  const memories = await searchMemories({ query: taskDesc, limit: 8 });
   const memCtx = memories.length > 0
-    ? `\n# Previous Materials\n${memories.map((m) => `- ${m.content}`).join("\n")}`
+    ? `\n# Relevant Knowledge & Previous Materials\n${memories.map((m) => `[${m.category}] ${m.content}`).join("\n")}`
     : "";
 
   const modelWithTools = model.bindTools([createApprovalTool, logAgentActionTool]);

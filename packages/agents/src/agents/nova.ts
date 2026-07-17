@@ -62,13 +62,11 @@ export async function novaNode(
   // Check existing content to avoid repetition
   const existingContent = await searchMemories({
     query: taskDescription,
-    agentName: "NOVA",
-    category: "content_context",
-    limit: 5,
+    limit: 8,
   });
 
   const memoryContext = existingContent.length > 0
-    ? `\n# Previous Content (avoid repeating)\n${existingContent.map((m) => `- ${m.content}`).join("\n")}`
+    ? `\n# Relevant Knowledge & Previous Content\n${existingContent.map((m) => `[${m.category}] ${m.content}`).join("\n")}`
     : "";
 
   const systemPrompt = buildSystemPrompt("nova", NOVA_CONTEXT + memoryContext);

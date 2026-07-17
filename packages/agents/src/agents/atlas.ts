@@ -57,12 +57,11 @@ export async function atlasNode(
 
   const relevantMemories = await searchMemories({
     query: taskDescription,
-    agentName: "ATLAS",
-    limit: 5,
+    limit: 8,
   });
 
   const memoryContext = relevantMemories.length > 0
-    ? `\n# Previous Opportunity Research\n${relevantMemories.map((m) => `- ${m.content}`).join("\n")}`
+    ? `\n# Relevant Knowledge & History\n${relevantMemories.map((m) => `[${m.category}] ${m.content}`).join("\n")}`
     : "";
 
   const systemPrompt = buildSystemPrompt("atlas", ATLAS_CONTEXT + memoryContext);

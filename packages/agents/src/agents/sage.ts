@@ -67,12 +67,11 @@ export async function sageNode(
   
   const relevantMemories = await searchMemories({
     query: taskDescription,
-    agentName: "SAGE",
-    limit: 5,
+    limit: 8,
   });
 
   const memoryContext = relevantMemories.length > 0
-    ? `\n# Previous Research\n${relevantMemories.map((m) => `- ${m.content}`).join("\n")}`
+    ? `\n# Relevant Knowledge & History\n${relevantMemories.map((m) => `[${m.category}] ${m.content}`).join("\n")}`
     : "";
 
   const systemPrompt = buildSystemPrompt("sage", SAGE_CONTEXT + memoryContext);
