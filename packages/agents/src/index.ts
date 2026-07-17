@@ -5,3 +5,5 @@ export { QuinnState, MAX_ITERATIONS } from "./state.js";
 export type { QuinnStateType } from "./state.js";
 export { runDailyBriefing, runWeeklyReport, runWeeklyPriorities, runQuarterlyPlanning, chatWithQuinn } from "./workflows/index.js";
 export { storeMemory, searchMemories, getRecentMemories } from "./memory/index.js";
+export { createTelegramBot } from "./telegram/bot.js";
+export { executeApprovedAction } from "./executor/index.js";

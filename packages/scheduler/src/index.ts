@@ -13,6 +13,7 @@ import {
   runWeeklyReport,
   runWeeklyPriorities,
   runQuarterlyPlanning,
+  chatWithQuinn,
 } from "@quinn/agents";
 import type { QuinnGraph } from "@quinn/agents";
 
@@ -32,6 +33,34 @@ export async function createScheduler(redisUrl?: string) {
     "daily-briefing",
     { pattern: "0 8 * * *" },
     { name: "daily-briefing", data: { workflow: "daily-briefing" } },
+  );
+
+  // Morning research sweep — every day at 6:00 AM (before briefing)
+  await queue.upsertJobScheduler(
+    "research-sweep",
+    { pattern: "0 6 * * *" },
+    { name: "research-sweep", data: { workflow: "research-sweep" } },
+  );
+
+  // Analytics snapshot — every day at 7:00 AM
+  await queue.upsertJobScheduler(
+    "analytics-snapshot",
+    { pattern: "0 7 * * *" },
+    { name: "analytics-snapshot", data: { workflow: "analytics-snapshot" } },
+  );
+
+  // Content generation — every day at 7:30 AM
+  await queue.upsertJobScheduler(
+    "content-generation",
+    { pattern: "30 7 * * *" },
+    { name: "content-generation", data: { workflow: "content-generation" } },
+  );
+
+  // Follow-up check — hourly during business hours (9 AM - 6 PM)
+  await queue.upsertJobScheduler(
+    "follow-up-check",
+    { pattern: "0 9-18 * * *" },
+    { name: "follow-up-check", data: { workflow: "follow-up-check" } },
   );
 
   // Weekly priorities — Monday at 9:00 AM
@@ -56,7 +85,11 @@ export async function createScheduler(redisUrl?: string) {
   );
 
   console.log("📅 Quinn scheduler initialized with cron jobs:");
+  console.log("   • Research sweep:     0 6 * * *");
+  console.log("   • Analytics snapshot: 0 7 * * *");
+  console.log("   • Content generation: 30 7 * * *");
   console.log("   • Daily briefing:     0 8 * * *");
+  console.log("   • Follow-up check:    0 9-18 * * * (hourly)");
   console.log("   • Weekly priorities:  0 9 * * 1");
   console.log("   • Weekly report:      0 17 * * 5");
   console.log("   • Quarterly planning: 0 9 1 1,4,7,10 *");
@@ -88,6 +121,18 @@ export async function createWorker(redisUrl?: string) {
         switch (job.data.workflow) {
           case "daily-briefing":
             await runDailyBriefing(graph);
+            break;
+          case "research-sweep":
+            await chatWithQuinn(graph, "Run a morning research sweep. Ask Sage to search for new industry developments, competitor news, and emerging opportunities. Store any findings.");
+            break;
+          case "analytics-snapshot":
+            await chatWithQuinn(graph, "Run the analytics snapshot. Ask Beacon to review all KPIs, check quarterly goal progress, and flag any anomalies or metrics behind target.");
+            break;
+          case "content-generation":
+            await chatWithQuinn(graph, "Run morning content generation. Ask Nova to review the content calendar, generate any content due soon, and create draft LinkedIn posts for this week.");
+            break;
+          case "follow-up-check":
+            await chatWithQuinn(graph, "Run a follow-up check. Ask Iris to review all relationships for overdue follow-ups, expiring opportunities, and CRM items needing attention today.");
             break;
           case "weekly-report":
             await runWeeklyReport(graph);

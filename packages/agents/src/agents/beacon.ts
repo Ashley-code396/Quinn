@@ -5,7 +5,7 @@ import { ChatGroq } from "@langchain/groq";
 import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import type { QuinnStateType } from "../state.js";
 import { buildSystemPrompt } from "../prompts/system.js";
-import { getAnalyticsSnapshotsTool, getQuarterlyGoalsTool, logAgentActionTool } from "../tools/index.js";
+import { getAnalyticsSnapshotsTool, getQuarterlyGoalsTool, logAgentActionTool, searchWebTool } from "../tools/index.js";
 import { searchMemories, storeMemory } from "../memory/index.js";
 import { lastMessageType } from "../messages.js";
 
@@ -32,7 +32,7 @@ export async function beaconNode(state: QuinnStateType): Promise<Partial<QuinnSt
     ? `\n# Previous Analytics\n${memories.map((m) => `- ${m.content}`).join("\n")}`
     : "";
 
-  const modelWithTools = model.bindTools([getAnalyticsSnapshotsTool, getQuarterlyGoalsTool, logAgentActionTool]);
+  const modelWithTools = model.bindTools([searchWebTool, getAnalyticsSnapshotsTool, getQuarterlyGoalsTool, logAgentActionTool]);
   const beaconMessages = [
     new SystemMessage(buildSystemPrompt("beacon", BEACON_CONTEXT + memCtx)),
     ...state.messages.slice(-5),
@@ -42,14 +42,14 @@ export async function beaconNode(state: QuinnStateType): Promise<Partial<QuinnSt
   }
   let response = await modelWithTools.invoke(beaconMessages);
 
-  const beaconTools = [getAnalyticsSnapshotsTool, getQuarterlyGoalsTool, logAgentActionTool];
+  const beaconTools = [searchWebTool, getAnalyticsSnapshotsTool, getQuarterlyGoalsTool, logAgentActionTool];
 
   if (response.tool_calls?.length && !response.content?.toString().trim()) {
     const toolResults: string[] = [];
     for (const tc of response.tool_calls) {
       const tool = beaconTools.find(t => t.name === tc.name);
       if (tool) {
-        const result = await tool.invoke(tc.args as Record<string, unknown>);
+        const result = await (tool as any).invoke(tc.args);
         toolResults.push(`${tc.name} returned:\n${typeof result === "string" ? result.slice(0, 2000) : JSON.stringify(result).slice(0, 2000)}`);
       }
     }

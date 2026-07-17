@@ -5,18 +5,21 @@
  */
 
 import dotenv from "dotenv";
-import { resolve } from "path";
-dotenv.config({ path: resolve(process.cwd(), "../.env") });
+import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
+const __dirname = dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: resolve(__dirname, "../../../.env") });
 
 import express from "express";
 import cors from "cors";
 import { createServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { prisma } from "@quinn/database";
-import { buildQuinnGraph, chatWithQuinn } from "@quinn/agents";
+import { buildQuinnGraph, chatWithQuinn, createTelegramBot } from "@quinn/agents";
 import type { QuinnGraph } from "@quinn/agents";
 import { createScheduler, createWorker, triggerWorkflow } from "@quinn/scheduler";
 import type { Queue } from "bullmq";
+import { executeApprovedAction } from "@quinn/agents";
 
 const app = express();
 const PORT = parseInt(process.env.API_PORT ?? "4000", 10);
@@ -86,6 +89,7 @@ app.post("/api/approvals/:id/approve", async (req, res) => {
     },
   });
   broadcast("approval:updated", approval);
+  executeApprovedAction(req.params.id).catch((err) => console.error("Post-approval execution failed:", err));
   res.json(approval);
 });
 
@@ -267,6 +271,16 @@ async function start() {
   // Start scheduler worker
   await createWorker();
   console.log("  ✅ Scheduler worker started");
+
+  // Start Telegram bot
+  const telegramBot = createTelegramBot(graph);
+  if (telegramBot) {
+    telegramBot.launch({ dropPendingUpdates: true }).then(() => {
+      console.log("  ✅ Telegram bot started — polling Telegram API");
+    }).catch((err) => {
+      console.error("  ❌ Telegram bot failed to start:", err);
+    });
+  }
 
   // Start HTTP server
   server.listen(PORT, () => {

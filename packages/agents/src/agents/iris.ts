@@ -90,7 +90,7 @@ export async function irisNode(
     for (const tc of response.tool_calls) {
       const tool = irisTools.find(t => t.name === tc.name);
       if (tool) {
-        const result = await tool.invoke(tc.args as Record<string, unknown>);
+        const result = await (tool as any).invoke(tc.args);
         toolResults.push(`${tc.name} returned:\n${typeof result === "string" ? result.slice(0, 2000) : JSON.stringify(result).slice(0, 2000)}`);
       }
     }

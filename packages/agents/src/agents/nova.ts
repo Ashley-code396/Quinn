@@ -14,6 +14,7 @@ import {
   createContentItemTool,
   createApprovalTool,
   logAgentActionTool,
+  searchWebTool,
 } from "../tools/index.js";
 import { searchMemories, storeMemory } from "../memory/index.js";
 import { lastMessageType } from "../messages.js";
@@ -73,6 +74,7 @@ export async function novaNode(
   const systemPrompt = buildSystemPrompt("nova", NOVA_CONTEXT + memoryContext);
 
   const modelWithTools = model.bindTools([
+    searchWebTool,
     getContentItemsTool,
     createContentItemTool,
     createApprovalTool,
@@ -88,14 +90,14 @@ export async function novaNode(
   }
   let response = await modelWithTools.invoke(novaMessages);
 
-  const novaTools = [getContentItemsTool, createContentItemTool, createApprovalTool, logAgentActionTool];
+  const novaTools = [searchWebTool, getContentItemsTool, createContentItemTool, createApprovalTool, logAgentActionTool];
 
   if (response.tool_calls?.length && !response.content?.toString().trim()) {
     const toolResults: string[] = [];
     for (const tc of response.tool_calls) {
       const tool = novaTools.find(t => t.name === tc.name);
       if (tool) {
-        const result = await tool.invoke(tc.args as Record<string, unknown>);
+        const result = await (tool as any).invoke(tc.args);
         toolResults.push(`${tc.name} returned:\n${typeof result === "string" ? result.slice(0, 2000) : JSON.stringify(result).slice(0, 2000)}`);
       }
     }

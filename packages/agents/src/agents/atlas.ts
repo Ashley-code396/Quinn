@@ -13,6 +13,8 @@ import {
   searchOrganizationsTool,
   createApprovalTool,
   logAgentActionTool,
+  searchWebTool,
+  extractWebContentTool,
 } from "../tools/index.js";
 import { searchMemories, storeMemory } from "../memory/index.js";
 import { lastMessageType } from "../messages.js";
@@ -66,6 +68,8 @@ export async function atlasNode(
   const systemPrompt = buildSystemPrompt("atlas", ATLAS_CONTEXT + memoryContext);
 
   const modelWithTools = model.bindTools([
+    searchWebTool,
+    extractWebContentTool,
     getOpportunitiesTool,
     searchOrganizationsTool,
     createApprovalTool,
@@ -81,14 +85,14 @@ export async function atlasNode(
   }
   let response = await modelWithTools.invoke(atlasMessages);
 
-  const atlasTools = [getOpportunitiesTool, searchOrganizationsTool, createApprovalTool, logAgentActionTool];
+  const atlasTools = [searchWebTool, extractWebContentTool, getOpportunitiesTool, searchOrganizationsTool, createApprovalTool, logAgentActionTool];
 
   if (response.tool_calls?.length && !response.content?.toString().trim()) {
     const toolResults: string[] = [];
     for (const tc of response.tool_calls) {
       const tool = atlasTools.find(t => t.name === tc.name);
       if (tool) {
-        const result = await tool.invoke(tc.args as Record<string, unknown>);
+        const result = await (tool as any).invoke(tc.args);
         toolResults.push(`${tc.name} returned:\n${typeof result === "string" ? result.slice(0, 2000) : JSON.stringify(result).slice(0, 2000)}`);
       }
     }

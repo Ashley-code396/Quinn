@@ -7,7 +7,7 @@
 
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
-import { prisma } from "@quinn/database";
+import { prisma, OpportunityType, OpportunityStatus, AgentName, OutreachStatus } from "@quinn/database";
 
 /**
  * Search organizations in the database.
@@ -27,7 +27,7 @@ export const searchOrganizationsTool = tool(
               }
             : {},
           industry ? { industry: { contains: industry, mode: "insensitive" } } : {},
-          status ? { outreachStatus: status as never } : {},
+          status ? { outreachStatus: outreachStatusMap[status.toLowerCase()] ?? (status as OutreachStatus) } : {},
         ],
       },
       orderBy: { priorityScore: "desc" },
@@ -241,7 +241,7 @@ export const createContentItemTool = tool(
 export const getFollowUpsDueTool = tool(
   async ({ daysAhead }) => {
     const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() + toNumber(daysAhead) ?? 7);
+    cutoff.setDate(cutoff.getDate() + (toNumber(daysAhead) ?? 7));
     const relationships = await prisma.relationship.findMany({
       where: {
         nextFollowUp: { lte: cutoff },
@@ -267,12 +267,65 @@ export const getFollowUpsDueTool = tool(
 /**
  * Get opportunities.
  */
+const outreachStatusMap: Record<string, OutreachStatus> = {
+  "not contacted": OutreachStatus.NOT_CONTACTED,
+  not_contacted: OutreachStatus.NOT_CONTACTED,
+  researching: OutreachStatus.RESEARCHING,
+  "draft ready": OutreachStatus.DRAFT_READY,
+  draft_ready: OutreachStatus.DRAFT_READY,
+  "awaiting approval": OutreachStatus.AWAITING_APPROVAL,
+  awaiting_approval: OutreachStatus.AWAITING_APPROVAL,
+  contacted: OutreachStatus.CONTACTED,
+  responded: OutreachStatus.RESPONDED,
+  "in conversation": OutreachStatus.IN_CONVERSATION,
+  in_conversation: OutreachStatus.IN_CONVERSATION,
+  "meeting scheduled": OutreachStatus.MEETING_SCHEDULED,
+  meeting_scheduled: OutreachStatus.MEETING_SCHEDULED,
+  "proposal sent": OutreachStatus.PROPOSAL_SENT,
+  proposal_sent: OutreachStatus.PROPOSAL_SENT,
+  negotiating: OutreachStatus.NEGOTIATING,
+  partner: OutreachStatus.PARTNER,
+  declined: OutreachStatus.DECLINED,
+  dormant: OutreachStatus.DORMANT,
+};
+
+const opportunityTypeMap: Record<string, OpportunityType> = {
+  partnership: OpportunityType.STRATEGIC_PARTNER,
+  "strategic partner": OpportunityType.STRATEGIC_PARTNER,
+  enterprise: OpportunityType.ENTERPRISE_PROSPECT,
+  "enterprise prospect": OpportunityType.ENTERPRISE_PROSPECT,
+  pilot: OpportunityType.PILOT_CUSTOMER,
+  "pilot customer": OpportunityType.PILOT_CUSTOMER,
+  investor: OpportunityType.INVESTOR,
+  accelerator: OpportunityType.ACCELERATOR,
+  grant: OpportunityType.GRANT,
+  conference: OpportunityType.CONFERENCE,
+  competition: OpportunityType.COMPETITION,
+  media: OpportunityType.MEDIA_FEATURE,
+  "media feature": OpportunityType.MEDIA_FEATURE,
+  speaking: OpportunityType.SPEAKING_ENGAGEMENT,
+  "speaking engagement": OpportunityType.SPEAKING_ENGAGEMENT,
+};
+
+const opportunityStatusMap: Record<string, OpportunityStatus> = {
+  identified: OpportunityStatus.IDENTIFIED,
+  researching: OpportunityStatus.RESEARCHING,
+  qualified: OpportunityStatus.QUALIFIED,
+  pursuing: OpportunityStatus.PURSUING,
+  applied: OpportunityStatus.APPLIED,
+  "in progress": OpportunityStatus.IN_PROGRESS,
+  in_progress: OpportunityStatus.IN_PROGRESS,
+  won: OpportunityStatus.WON,
+  lost: OpportunityStatus.LOST,
+  deferred: OpportunityStatus.DEFERRED,
+};
+
 export const getOpportunitiesTool = tool(
   async ({ type, status, limit }) => {
     const opportunities = await prisma.opportunity.findMany({
       where: {
-        ...(type && { type: type as never }),
-        ...(status && { status: status as never }),
+        ...(type && { type: opportunityTypeMap[type.toLowerCase()] ?? (type as OpportunityType) }),
+        ...(status && { status: opportunityStatusMap[status.toLowerCase()] ?? (status as OpportunityStatus) }),
       },
       include: {
         organization: { select: { name: true, id: true } },
@@ -309,11 +362,21 @@ function asEnum<T extends string>(val: string, valid: readonly T[], fallback: T)
 /**
  * Log an agent action for audit trail.
  */
+const agentNameMap: Record<string, AgentName> = {
+  quinn: AgentName.QUINN,
+  sage: AgentName.SAGE,
+  nova: AgentName.NOVA,
+  atlas: AgentName.ATLAS,
+  iris: AgentName.IRIS,
+  helix: AgentName.HELIX,
+  beacon: AgentName.BEACON,
+};
+
 export const logAgentActionTool = tool(
   async ({ agentName, action, input, output }) => {
     await prisma.agentLog.create({
       data: {
-        agentName: agentName as never,
+        agentName: agentNameMap[agentName.toLowerCase()] ?? (agentName as AgentName),
         action,
         input: input as never,
         output: output as never,

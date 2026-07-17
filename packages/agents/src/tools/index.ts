@@ -11,3 +11,5 @@ export {
   logAgentActionTool,
   getAnalyticsSnapshotsTool,
 } from "./database.js";
+
+export { searchWebTool, extractWebContentTool } from "./web-search.js";

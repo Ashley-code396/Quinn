@@ -13,6 +13,8 @@ import {
   searchOrganizationsTool,
   upsertOrganizationTool,
   logAgentActionTool,
+  searchWebTool,
+  extractWebContentTool,
 } from "../tools/index.js";
 import { searchMemories, storeMemory } from "../memory/index.js";
 import { lastMessageType } from "../messages.js";
@@ -76,6 +78,8 @@ export async function sageNode(
   const systemPrompt = buildSystemPrompt("sage", SAGE_CONTEXT + memoryContext);
 
   const modelWithTools = model.bindTools([
+    searchWebTool,
+    extractWebContentTool,
     searchOrganizationsTool,
     upsertOrganizationTool,
     logAgentActionTool,
@@ -91,14 +95,14 @@ export async function sageNode(
   }
   let response = await modelWithTools.invoke(sageMessages);
 
-  const sageTools = [searchOrganizationsTool, upsertOrganizationTool, logAgentActionTool];
+  const sageTools = [searchWebTool, extractWebContentTool, searchOrganizationsTool, upsertOrganizationTool, logAgentActionTool];
 
   if (response.tool_calls?.length && !response.content?.toString().trim()) {
     const toolResults: string[] = [];
     for (const tc of response.tool_calls) {
       const tool = sageTools.find(t => t.name === tc.name);
       if (tool) {
-        const result = await tool.invoke(tc.args as Record<string, unknown>);
+        const result = await (tool as any).invoke(tc.args);
         toolResults.push(`${tc.name} returned:\n${typeof result === "string" ? result.slice(0, 2000) : JSON.stringify(result).slice(0, 2000)}`);
       }
     }
