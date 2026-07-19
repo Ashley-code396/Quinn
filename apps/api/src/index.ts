@@ -23,7 +23,7 @@ import { executeApprovedAction } from "@quinn/agents";
 import { cacheGet, cacheDel, cacheInvalidate } from "@quinn/shared";
 
 const app = express();
-const PORT = parseInt(process.env.API_PORT ?? "4000", 10);
+const PORT = parseInt(process.env.PORT ?? process.env.API_PORT ?? "4000", 10);
 
 app.use(cors());
 app.use(express.json());

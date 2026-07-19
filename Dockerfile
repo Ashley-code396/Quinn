@@ -15,15 +15,18 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm build --filter=@quinn/api --filter=@quinn/agents --filter=@quinn/database --filter=@quinn/scheduler --filter=@quinn/shared
 
-RUN pnpm deploy --filter=@quinn/api /app/deploy
-
 FROM node:22-alpine
 WORKDIR /app
 
-ENV NODE_ENV=production
-ENV PORT=4000
+RUN corepack enable && corepack prepare pnpm@9 --activate
 
-COPY --from=builder /app/deploy .
+ENV NODE_ENV=production
+
+COPY --from=builder /app/apps/api/dist ./apps/api/dist
+COPY --from=builder /app/packages ./packages
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/apps/api/package.json ./apps/api/
 
 EXPOSE 4000
-CMD ["node", "dist/index.js"]
+CMD ["node", "apps/api/dist/index.js"]
