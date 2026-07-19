@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Sparkles, User, Loader2 } from "lucide-react";
+import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar } from "@/components/ui/avatar";
+import { fadeUp } from "@/lib/animations";
 
 interface Message {
   role: "user" | "assistant";
@@ -21,7 +21,7 @@ export default function ChatPage() {
     {
       role: "assistant",
       content:
-        "Good day! I'm Quinn, your AI Chief Marketing Officer at Dermaqea. I'm here to help with strategy, content, research, partnerships, and anything marketing-related.\n\nWhat would you like to discuss? I can:\n• Generate a daily briefing\n• Research potential partners\n• Draft content for LinkedIn\n• Review our quarterly goals\n• Recommend growth opportunities\n\nJust ask me anything.",
+        "Good day. I'm Quinn, the AI CMO for Dermaqea.\n\nI can help with strategy, content, research, partnerships, and marketing. What would you like to discuss?",
       timestamp: new Date(),
     },
   ]);
@@ -69,7 +69,7 @@ export default function ChatPage() {
           ...prev,
           {
             role: "assistant",
-            content: "I encountered an error processing your request. Please try again.",
+            content: "I encountered an error processing your request.",
             timestamp: new Date(),
           },
         ]);
@@ -80,7 +80,7 @@ export default function ChatPage() {
         {
           role: "assistant",
           content:
-            "I'm unable to connect to the server. Make sure the API is running with `pnpm dev` in the `apps/api` directory.",
+            "Unable to connect to the server. Ensure the API is running.",
           timestamp: new Date(),
         },
       ]);
@@ -89,98 +89,92 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="space-y-6 h-[calc(100vh-8rem)] flex flex-col">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">
-          <span className="text-gradient">Talk to Quinn</span>
+    <motion.div
+      className="space-y-6 h-[calc(100vh-8rem)] flex flex-col"
+      initial="hidden"
+      animate="visible"
+      variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.1 } } }}
+    >
+      <motion.div variants={fadeUp}>
+        <h1 className="text-3xl font-semibold tracking-tight text-[#EDE8E0]">
+          Talk to Quinn
         </h1>
-        <p className="text-muted-foreground mt-1">
-          Direct conversation with your AI Chief Marketing Officer.
+        <p className="text-[#A0988E] mt-2 text-sm">
+          Direct conversation with your AI CMO.
         </p>
-      </div>
+      </motion.div>
 
-      {/* Chat Area */}
-      <Card className="glass-card flex-1 flex flex-col overflow-hidden">
-        <ScrollArea className="flex-1 p-6" ref={scrollRef}>
-          <div className="space-y-6 max-w-3xl mx-auto">
-            {messages.map((msg, i) => (
-              <div
-                key={i}
-                className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
-              >
-                <Avatar className="h-8 w-8 shrink-0 flex items-center justify-center rounded-full border border-border">
-                  {msg.role === "assistant" ? (
-                    <Sparkles className="h-4 w-4 text-primary" />
-                  ) : (
-                    <User className="h-4 w-4 text-muted-foreground" />
-                  )}
-                </Avatar>
-                <div
-                  className={`rounded-2xl px-4 py-3 max-w-[80%] ${
-                    msg.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted"
-                  }`}
+      <motion.div variants={fadeUp} className="flex-1 flex flex-col">
+        <Card className="flex-1 flex flex-col overflow-hidden">
+          <ScrollArea className="flex-1 p-6" ref={scrollRef}>
+            <div className="space-y-5 max-w-3xl mx-auto">
+              {messages.map((msg, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                  className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
                 >
-                  <p className="text-sm whitespace-pre-wrap leading-relaxed">
-                    {msg.content}
-                  </p>
-                  <p
-                    className={`text-[10px] mt-2 ${
+                  <div
+                    className={`rounded-xl px-4 py-3 max-w-[80%] leading-relaxed text-sm ${
                       msg.role === "user"
-                        ? "text-primary-foreground/60"
-                        : "text-muted-foreground/60"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-white/[0.04] border border-white/[0.06] text-[#EDE8E0]/80"
                     }`}
                   >
-                    {msg.timestamp.toLocaleTimeString("en-US", {
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}
-                  </p>
+                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                    <p
+                      className={`text-[10px] mt-2 ${
+                        msg.role === "user"
+                          ? "text-primary-foreground/60"
+                          : "text-[#A0988E]/50"
+                      }`}
+                    >
+                      {msg.timestamp.toLocaleTimeString("en-US", {
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
+              {loading && (
+                <div className="flex gap-3">
+                  <div className="rounded-xl px-4 py-3 bg-white/[0.04] border border-white/[0.06]">
+                    <span className="text-sm text-[#A0988E]">Quinn is thinking</span>
+                  </div>
                 </div>
-              </div>
-            ))}
-            {loading && (
-              <div className="flex gap-3">
-                <Avatar className="h-8 w-8 shrink-0 flex items-center justify-center rounded-full border border-border">
-                  <Sparkles className="h-4 w-4 text-primary animate-pulse" />
-                </Avatar>
-                <div className="rounded-2xl px-4 py-3 bg-muted">
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                </div>
-              </div>
-            )}
-          </div>
-        </ScrollArea>
+              )}
+            </div>
+          </ScrollArea>
 
-        {/* Input */}
-        <div className="border-t border-border p-4">
-          <div className="flex gap-3 max-w-3xl mx-auto">
-            <Textarea
-              placeholder="Ask Quinn anything about Dermaqea's marketing strategy..."
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              className="min-h-[44px] max-h-[120px] resize-none"
-              rows={1}
-            />
-            <Button
-              size="icon"
-              onClick={handleSend}
-              disabled={!input.trim() || loading}
-              className="shrink-0 h-11 w-11"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
+          <div className="border-t border-white/[0.06] p-4 bg-white/[0.02]">
+            <div className="flex gap-3 max-w-3xl mx-auto">
+              <Textarea
+                placeholder="Ask Quinn about Dermaqea's marketing..."
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                className="min-h-[44px] max-h-[140px] resize-none"
+                rows={1}
+              />
+              <Button
+                onClick={handleSend}
+                disabled={!input.trim() || loading}
+                className="shrink-0"
+              >
+                Send
+              </Button>
+            </div>
           </div>
-        </div>
-      </Card>
-    </div>
+        </Card>
+      </motion.div>
+    </motion.div>
   );
 }

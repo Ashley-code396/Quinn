@@ -2,20 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  LayoutDashboard,
-  CheckCircle2,
-  Search,
-  FileText,
-  TrendingUp,
-  Users,
-  BarChart3,
-  Target,
-  MessageSquare,
-  Settings,
-  Sparkles,
-  ChevronLeft,
-} from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -27,16 +14,16 @@ import {
 } from "@/components/ui/tooltip";
 
 const navItems = [
-  { href: "/", label: "Command Center", icon: LayoutDashboard },
-  { href: "/approvals", label: "Approvals", icon: CheckCircle2, badge: true },
-  { href: "/research", label: "Research", icon: Search },
-  { href: "/content", label: "Content Hub", icon: FileText },
-  { href: "/growth", label: "Growth", icon: TrendingUp },
-  { href: "/relationships", label: "CRM", icon: Users },
-  { href: "/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/goals", label: "OKRs", icon: Target },
-  { href: "/chat", label: "Talk to Quinn", icon: MessageSquare },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/", label: "Command Center" },
+  { href: "/approvals", label: "Approvals", badge: true },
+  { href: "/research", label: "Research" },
+  { href: "/content", label: "Content Hub" },
+  { href: "/growth", label: "Growth" },
+  { href: "/relationships", label: "CRM" },
+  { href: "/analytics", label: "Analytics" },
+  { href: "/goals", label: "OKRs" },
+  { href: "/chat", label: "Talk to Quinn" },
+  { href: "/settings", label: "Settings" },
 ];
 
 export default function DashboardLayout({
@@ -49,60 +36,56 @@ export default function DashboardLayout({
 
   return (
     <TooltipProvider>
-      <div className="flex h-screen overflow-hidden">
+      <div className="flex h-screen overflow-hidden bg-[#050608]">
+        {/* Background layers */}
+        <div className="bg-layer">
+          <div className="bg-aurora" />
+          <div className="bg-radial" />
+          <div className="bg-grid" />
+          <div className="bg-noise" />
+        </div>
+
         {/* Sidebar */}
         <aside
           className={cn(
-            "flex flex-col border-r border-sidebar-border bg-sidebar transition-all duration-300 ease-in-out",
-            collapsed ? "w-[68px]" : "w-[260px]",
+            "relative z-10 flex flex-col border-r border-sidebar-border bg-sidebar/80 backdrop-blur-xl transition-all duration-300 ease-out",
+            collapsed ? "w-[68px]" : "w-[240px]",
           )}
         >
-          {/* Logo */}
-          <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-4">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 glow-quinn">
-              <Sparkles className="h-5 w-5 text-primary" />
-            </div>
+          {/* Wordmark */}
+          <div className="flex h-16 items-center border-b border-sidebar-border px-5">
             {!collapsed && (
-              <div className="flex flex-col">
-                <span className="text-sm font-semibold text-gradient">Quinn</span>
-                <span className="text-[10px] text-muted-foreground tracking-wider uppercase">
-                  AI CMO • Dermaqea
-                </span>
-              </div>
+              <span className="text-base font-semibold tracking-tight text-[#EDE8E0]">
+                quinn
+              </span>
             )}
           </div>
 
           {/* Nav Items */}
-          <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
+          <nav className="flex-1 overflow-y-auto py-5 px-3 space-y-0.5">
             {navItems.map((item) => {
               const isActive =
                 pathname === item.href ||
                 (item.href !== "/" && pathname.startsWith(item.href));
-              const Icon = item.icon;
 
               const link = (
                 <Link
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                    "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-200",
                     isActive
-                      ? "bg-primary/10 text-primary glow-quinn"
-                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                      ? "bg-white/[0.06] text-[#EDE8E0] font-medium"
+                      : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                     collapsed && "justify-center px-2",
                   )}
                 >
-                  <Icon
-                    className={cn(
-                      "h-[18px] w-[18px] shrink-0",
-                      isActive && "text-primary",
-                    )}
-                  />
                   {!collapsed && <span>{item.label}</span>}
                   {!collapsed && item.badge && (
-                    <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-primary/20 text-[10px] font-bold text-primary animate-pulse-dot">
-                      •
-                    </span>
+                    <span className="ml-auto inline-block w-1.5 h-1.5 rounded-full bg-primary/60" />
+                  )}
+                  {isActive && !collapsed && (
+                    <span className="ml-auto inline-block w-0.5 h-4 rounded-full bg-primary/60" />
                   )}
                 </Link>
               );
@@ -111,7 +94,10 @@ export default function DashboardLayout({
                 return (
                   <Tooltip key={item.href}>
                     <TooltipTrigger>{link}</TooltipTrigger>
-                    <TooltipContent side="right" className="font-medium">
+                    <TooltipContent
+                      side="right"
+                      className="font-medium bg-[#0B0D11]/95 backdrop-blur-xl border border-white/10 text-sm px-3 py-1.5"
+                    >
                       {item.label}
                     </TooltipContent>
                   </Tooltip>
@@ -122,16 +108,16 @@ export default function DashboardLayout({
           </nav>
 
           {/* Collapse Toggle */}
-          <div className="border-t border-sidebar-border p-2">
+          <div className="border-t border-sidebar-border p-3">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setCollapsed(!collapsed)}
-              className="w-full justify-center text-muted-foreground hover:text-foreground"
+              className="w-full justify-center text-muted-foreground/40 hover:text-foreground hover:bg-sidebar-accent rounded-lg h-8"
             >
               <ChevronLeft
                 className={cn(
-                  "h-4 w-4 transition-transform",
+                  "h-3.5 w-3.5 transition-transform duration-300",
                   collapsed && "rotate-180",
                 )}
               />
@@ -140,8 +126,10 @@ export default function DashboardLayout({
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto">
-          <div className="p-6 lg:p-8 max-w-[1400px] mx-auto">{children}</div>
+        <main className="relative z-10 flex-1 overflow-y-auto">
+          <div className="p-6 lg:p-10 max-w-[1360px] mx-auto content-layer">
+            {children}
+          </div>
         </main>
       </div>
     </TooltipProvider>

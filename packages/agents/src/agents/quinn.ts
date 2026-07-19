@@ -12,12 +12,20 @@ import { z } from "zod";
 import type { QuinnStateType } from "../state.js";
 import { MAX_ITERATIONS } from "../state.js";
 import { buildSystemPrompt } from "../prompts/system.js";
-import { searchMemories } from "../memory/index.js";
+import { searchMemories, isRedisMemoryConfigured, searchLongTermMemory } from "../memory/index.js";
 import { getCurrentQuarter } from "@quinn/shared";
 import { lastMessageType } from "../messages.js";
 
 const QUINN_ADDITIONAL_CONTEXT = `
-# Your Daily Responsibilities
+# Your Role
+You are Quinn, the CEO's AI Chief Marketing Officer. You are also a friendly, conversational partner. The CEO talks to you throughout the day — sometimes about marketing, sometimes just casual chat. Be warm, professional, and natural.
+
+# Conversation
+- If the CEO greets you, chats casually, or asks something simple, respond directly and conversationally. Set next to "__end__" and put your natural response in messageToAgent.
+- Use a warm, professional tone. Be concise but human.
+- You can acknowledge requests, ask clarifying questions, or give quick answers without delegating to other agents.
+
+# Marketing Work (Daily Responsibilities)
 1. Review quarterly goals and assess progress.
 2. Check active marketing campaigns.
 3. Review pending approvals that need human attention.
@@ -37,9 +45,9 @@ const QUINN_ADDITIONAL_CONTEXT = `
 - Delegate to "helix" for pitch decks, presentations, marketing materials.
 - Delegate to "beacon" for analytics, KPI tracking, performance reports.
 - When you have enough information, set next to "synthesize" to produce your final briefing.
-- Set next to "__end__" when the workflow is complete.
+- Set next to "__end__" when done — this sends your messageToAgent back to the CEO as your response.
 
-# Decision Framework
+# Decision Framework (for marketing recommendations)
 Every recommendation MUST include:
 - What: specific action to take
 - Reasoning: why this matters now
@@ -87,13 +95,26 @@ export async function quinnNode(
   });
 
   // Retrieve relevant memories for context
-  const relevantMemories = await searchMemories({
-    query: state.trigger || "quarterly goals marketing strategy",
-    limit: 5,
-  });
+  const relevantMemories = isRedisMemoryConfigured()
+    ? await searchLongTermMemory({
+        query: state.trigger || "quarterly goals marketing strategy",
+        ownerId: "quinn",
+        namespace: "agent-context",
+        limit: 5,
+        similarityThreshold: 0.7,
+      })
+    : await searchMemories({
+        query: state.trigger || "quarterly goals marketing strategy",
+        limit: 5,
+      });
 
   const memoryContext = relevantMemories.length > 0
-    ? `\n# Relevant Memories\n${relevantMemories.map((m) => `- [${m.category}] ${m.content}`).join("\n")}`
+    ? `\n# Relevant Memories\n${relevantMemories.map((m) => {
+        const record = m as Record<string, unknown>;
+        const text = (record.text ?? record.content ?? "") as string;
+        const tag = record.category ?? (record.topics as string[])?.[0] ?? "memory";
+        return `- [${tag}] ${text}`;
+      }).join("\n")}`
     : "";
 
   const agentReportContext =

@@ -6,7 +6,6 @@
  */
 
 import { Queue, Worker } from "bullmq";
-import { Redis } from "ioredis";
 import {
   buildQuinnGraph,
   runDailyBriefing,
@@ -16,13 +15,12 @@ import {
   chatWithQuinn,
 } from "@quinn/agents";
 import type { QuinnGraph } from "@quinn/agents";
+import { getRedis } from "@quinn/shared";
 
 const QUEUE_NAME = "quinn-scheduler";
 
-export async function createScheduler(redisUrl?: string) {
-  const connection = new Redis(redisUrl ?? process.env.REDIS_URL ?? "redis://localhost:6379", {
-    maxRetriesPerRequest: null,
-  });
+export async function createScheduler() {
+  const connection = getRedis();
 
   const queue = new Queue(QUEUE_NAME, { connection: connection as any });
 
@@ -94,15 +92,12 @@ export async function createScheduler(redisUrl?: string) {
   console.log("   • Weekly report:      0 17 * * 5");
   console.log("   • Quarterly planning: 0 9 1 1,4,7,10 *");
 
-  return { queue, connection };
+  return { queue };
 }
 
-export async function createWorker(redisUrl?: string) {
-  const connection = new Redis(redisUrl ?? process.env.REDIS_URL ?? "redis://localhost:6379", {
-    maxRetriesPerRequest: null,
-  });
+export async function createWorker() {
+  const connection = getRedis();
 
-  // Build the graph once for the worker
   let graph: QuinnGraph | null = null;
 
   const worker = new Worker(

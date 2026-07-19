@@ -1,29 +1,35 @@
 "use client";
 
-import { Settings as SettingsIcon } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { motion } from "framer-motion";
+import { Card, CardContent } from "@/components/ui/card";
+import { fadeUp } from "@/lib/animations";
 
 export default function SettingsPage() {
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">
-          <span className="text-gradient">Settings</span>
+    <motion.div
+      className="space-y-10"
+      initial="hidden"
+      animate="visible"
+      variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.1 } } }}
+    >
+      <motion.div variants={fadeUp}>
+        <h1 className="text-3xl font-semibold tracking-tight text-[#EDE8E0]">
+          Settings
         </h1>
-        <p className="text-muted-foreground mt-1">
+        <p className="text-[#A0988E] mt-2 text-sm">
           Configure Quinn&apos;s behavior, model preferences, and brand guidelines.
         </p>
-      </div>
-      <Card className="glass-card">
-        <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-          <SettingsIcon className="h-12 w-12 text-muted-foreground/30 mb-4" />
-          <h3 className="text-lg font-semibold mb-2">Settings coming soon</h3>
-          <p className="text-sm text-muted-foreground max-w-sm">
-            This page will allow you to configure agent models, brand voice,
-            content preferences, notification settings, and API keys.
-          </p>
-        </CardContent>
-      </Card>
-    </div>
+      </motion.div>
+      <motion.div variants={fadeUp}>
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-20 text-center">
+            <p className="text-sm text-[#A0988E] max-w-sm leading-relaxed">
+              Settings page coming soon. Agent models, brand voice, and preferences
+              will be configurable here.
+            </p>
+          </CardContent>
+        </Card>
+      </motion.div>
+    </motion.div>
   );
 }

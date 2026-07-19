@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { TrendingUp, Rocket } from "lucide-react";
+import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { fadeUp, stagger } from "@/lib/animations";
 
 interface Opportunity {
   id: string; type: string; title: string; description: string;
@@ -22,47 +23,69 @@ export default function GrowthPage() {
   }, []);
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight"><span className="text-gradient">Growth Pipeline</span></h1>
-        <p className="text-muted-foreground mt-1">Opportunities discovered by Atlas — partnerships, grants, accelerators, and prospects.</p>
-      </div>
+    <motion.div
+      className="space-y-10"
+      initial="hidden"
+      animate="visible"
+      variants={stagger}
+    >
+      <motion.div variants={fadeUp}>
+        <h1 className="text-3xl font-semibold tracking-tight text-[#EDE8E0]">Growth Pipeline</h1>
+        <p className="text-[#A0988E] mt-2 text-sm">Opportunities discovered by Atlas.</p>
+      </motion.div>
       {opps.length === 0 ? (
-        <Card className="glass-card"><CardContent className="flex flex-col items-center justify-center py-16 text-center">
-          <Rocket className="h-12 w-12 text-muted-foreground/30 mb-4" />
-          <h3 className="text-lg font-semibold mb-2">No opportunities yet</h3>
-          <p className="text-sm text-muted-foreground max-w-sm">Atlas hasn&apos;t discovered opportunities yet. Ask Quinn to scan for growth.</p>
-        </CardContent></Card>
+        <motion.div variants={fadeUp}>
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-20 text-center">
+              <p className="text-sm text-[#A0988E] max-w-sm leading-relaxed">
+                No opportunities yet. Ask Quinn to scan for growth.
+              </p>
+            </CardContent>
+          </Card>
+        </motion.div>
       ) : (
-        <div className="grid gap-4">
-          {opps.map((opp) => (
-            <Card key={opp.id} className="glass-card transition-all hover:border-primary/20">
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge variant="outline" className="text-xs">{opp.type.replace(/_/g, " ")}</Badge>
-                      <Badge variant="secondary" className="text-xs">{opp.status}</Badge>
-                      {opp.organization && <Badge variant="outline" className="text-xs">{opp.organization.name}</Badge>}
+        <div className="grid gap-3">
+          {opps.map((opp, i) => (
+            <motion.div key={opp.id} variants={fadeUp} custom={i}>
+              <Card className="glass-card-hover">
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between gap-6">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge variant="outline" className="text-xs rounded-full">{opp.type.replace(/_/g, " ")}</Badge>
+                        <Badge variant="secondary" className="text-xs rounded-full">{opp.status}</Badge>
+                        {opp.organization && (
+                          <Badge variant="outline" className="text-xs rounded-full">{opp.organization.name}</Badge>
+                        )}
+                      </div>
+                      <h3 className="text-sm font-medium text-[#EDE8E0]">{opp.title}</h3>
+                      <p className="text-sm text-[#A0988E] mt-1.5 line-clamp-2 leading-relaxed">{opp.description}</p>
+                      <div className="grid grid-cols-3 gap-4 mt-4">
+                        <div>
+                          <p className="text-xs text-[#A0988E] mb-1">Strategic Fit</p>
+                          <Progress value={opp.strategicFit * 10} className="h-1" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-[#A0988E] mb-1">Revenue</p>
+                          <Progress value={opp.revenuePotential * 10} className="h-1" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-[#A0988E] mb-1">Brand Value</p>
+                          <Progress value={opp.brandValue * 10} className="h-1" />
+                        </div>
+                      </div>
                     </div>
-                    <h3 className="font-semibold mt-2">{opp.title}</h3>
-                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{opp.description}</p>
-                    <div className="grid grid-cols-3 gap-4 mt-3">
-                      <div><p className="text-xs text-muted-foreground">Strategic Fit</p><Progress value={opp.strategicFit * 10} className="h-1.5 mt-1" /></div>
-                      <div><p className="text-xs text-muted-foreground">Revenue</p><Progress value={opp.revenuePotential * 10} className="h-1.5 mt-1" /></div>
-                      <div><p className="text-xs text-muted-foreground">Brand Value</p><Progress value={opp.brandValue * 10} className="h-1.5 mt-1" /></div>
+                    <div className="text-right shrink-0 pt-1">
+                      <div className="text-2xl font-light text-[#EDE8E0]">{opp.probability}%</div>
+                      <p className="text-xs text-[#A0988E] mt-1">probability</p>
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
-                    <div className="text-2xl font-bold tabular-nums">{opp.probability}%</div>
-                    <p className="text-xs text-muted-foreground">probability</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </motion.div>
           ))}
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }

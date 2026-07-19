@@ -49,7 +49,7 @@ export async function irisNode(
   state: QuinnStateType,
 ): Promise<Partial<QuinnStateType>> {
    const model = new ChatGroq({
-      model: "meta-llama/llama-4-scout-17b-16e-instruct",
+      model: "llama-3.3-70b-versatile",
       temperature: 0.2,
     });
   const lastMessage = state.messages[state.messages.length - 1];

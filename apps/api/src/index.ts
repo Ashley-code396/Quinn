@@ -20,6 +20,7 @@ import type { QuinnGraph } from "@quinn/agents";
 import { createScheduler, createWorker, triggerWorkflow } from "@quinn/scheduler";
 import type { Queue } from "bullmq";
 import { executeApprovedAction } from "@quinn/agents";
+import { cacheGet, cacheDel, cacheInvalidate } from "@quinn/shared";
 
 const app = express();
 const PORT = parseInt(process.env.API_PORT ?? "4000", 10);
@@ -55,10 +56,11 @@ app.get("/api/health", (_req, res) => {
 
 // ---- Briefings ----
 app.get("/api/briefings", async (_req, res) => {
-  const briefings = await prisma.briefing.findMany({
-    orderBy: { date: "desc" },
-    take: 20,
-  });
+  const briefings = await cacheGet(
+    ["briefings", "list"],
+    () => prisma.briefing.findMany({ orderBy: { date: "desc" }, take: 20 }),
+    30,
+  );
   res.json(briefings);
 });
 
@@ -89,6 +91,7 @@ app.post("/api/approvals/:id/approve", async (req, res) => {
     },
   });
   broadcast("approval:updated", approval);
+  cacheDel("analytics", "summary").catch(() => {});
   executeApprovedAction(req.params.id).catch((err) => console.error("Post-approval execution failed:", err));
   res.json(approval);
 });
@@ -103,40 +106,51 @@ app.post("/api/approvals/:id/reject", async (req, res) => {
     },
   });
   broadcast("approval:updated", approval);
+  cacheDel("analytics", "summary").catch(() => {});
   res.json(approval);
 });
 
 // ---- Organizations ----
 app.get("/api/organizations", async (req, res) => {
   const { industry, status, search, limit } = req.query;
-  const orgs = await prisma.organization.findMany({
-    where: {
-      ...(industry && { industry: { contains: industry as string, mode: "insensitive" as const } }),
-      ...(status && { outreachStatus: status as never }),
-      ...(search && {
-        OR: [
-          { name: { contains: search as string, mode: "insensitive" as const } },
-          { industry: { contains: search as string, mode: "insensitive" as const } },
-        ],
-      }),
-    },
-    orderBy: { priorityScore: "desc" },
-    take: parseInt((limit as string) ?? "50", 10),
-  });
+  const cacheSegments: string[] = ["orgs", (industry as string) || "all", (status as string) || "all", (search as string) || "none", (limit as string) || "50"];
+  const orgs = await cacheGet(
+    cacheSegments,
+    () => prisma.organization.findMany({
+      where: {
+        ...(industry && { industry: { contains: industry as string, mode: "insensitive" as const } }),
+        ...(status && { outreachStatus: status as never }),
+        ...(search && {
+          OR: [
+            { name: { contains: search as string, mode: "insensitive" as const } },
+            { industry: { contains: search as string, mode: "insensitive" as const } },
+          ],
+        }),
+      },
+      orderBy: { priorityScore: "desc" },
+      take: parseInt((limit as string) ?? "50", 10),
+    }),
+    60,
+  );
   res.json(orgs);
 });
 
 // ---- Content ----
 app.get("/api/content", async (req, res) => {
   const { type, status, limit } = req.query;
-  const items = await prisma.contentItem.findMany({
-    where: {
-      ...(type && { type: type as never }),
-      ...(status && { status: status as never }),
-    },
-    orderBy: { createdAt: "desc" },
-    take: parseInt((limit as string) ?? "50", 10),
-  });
+  const cacheSegments: string[] = ["content", (type as string) || "all", (status as string) || "all", (limit as string) || "50"];
+  const items = await cacheGet(
+    cacheSegments,
+    () => prisma.contentItem.findMany({
+      where: {
+        ...(type && { type: type as never }),
+        ...(status && { status: status as never }),
+      },
+      orderBy: { createdAt: "desc" },
+      take: parseInt((limit as string) ?? "50", 10),
+    }),
+    60,
+  );
   res.json(items);
 });
 
@@ -158,15 +172,20 @@ app.get("/api/content/calendar", async (req, res) => {
 // ---- Opportunities ----
 app.get("/api/opportunities", async (req, res) => {
   const { type, status, limit } = req.query;
-  const opps = await prisma.opportunity.findMany({
-    where: {
-      ...(type && { type: type as never }),
-      ...(status && { status: status as never }),
-    },
-    include: { organization: { select: { name: true, id: true } } },
-    orderBy: { probability: "desc" },
-    take: parseInt((limit as string) ?? "50", 10),
-  });
+  const cacheSegments: string[] = ["opps", (type as string) || "all", (status as string) || "all", (limit as string) || "50"];
+  const opps = await cacheGet(
+    cacheSegments,
+    () => prisma.opportunity.findMany({
+      where: {
+        ...(type && { type: type as never }),
+        ...(status && { status: status as never }),
+      },
+      include: { organization: { select: { name: true, id: true } } },
+      orderBy: { probability: "desc" },
+      take: parseInt((limit as string) ?? "50", 10),
+    }),
+    60,
+  );
   res.json(opps);
 });
 
@@ -187,29 +206,36 @@ app.get("/api/relationships", async (req, res) => {
 
 // ---- Analytics ----
 app.get("/api/analytics", async (_req, res) => {
-  const snapshots = await prisma.analyticsSnapshot.findMany({
-    orderBy: { date: "desc" },
-    take: 30,
-  });
-  const pendingApprovals = await prisma.approval.count({ where: { status: "PENDING" } });
-  const totalOrgs = await prisma.organization.count();
-  const totalContent = await prisma.contentItem.count();
-  const totalOpps = await prisma.opportunity.count();
-
-  res.json({
-    snapshots,
-    summary: { pendingApprovals, totalOrgs, totalContent, totalOpps },
-  });
+  const data = await cacheGet(
+    ["analytics", "summary"],
+    async () => {
+      const [snapshots, pendingApprovals, totalOrgs, totalContent, totalOpps] = await Promise.all([
+        prisma.analyticsSnapshot.findMany({ orderBy: { date: "desc" }, take: 30 }),
+        prisma.approval.count({ where: { status: "PENDING" } }),
+        prisma.organization.count(),
+        prisma.contentItem.count(),
+        prisma.opportunity.count(),
+      ]);
+      return { snapshots, summary: { pendingApprovals, totalOrgs, totalContent, totalOpps } };
+    },
+    30,
+  );
+  res.json(data);
 });
 
 // ---- Goals / OKRs ----
 app.get("/api/goals", async (req, res) => {
   const { quarter } = req.query;
-  const goals = await prisma.quarterlyGoal.findMany({
-    where: quarter ? { quarter: quarter as string } : {},
-    include: { keyResults: true, initiatives: true },
-    orderBy: { createdAt: "desc" },
-  });
+  const cacheSegments: string[] = ["goals", (quarter as string) || "current"];
+  const goals = await cacheGet(
+    cacheSegments,
+    () => prisma.quarterlyGoal.findMany({
+      where: quarter ? { quarter: quarter as string } : {},
+      include: { keyResults: true, initiatives: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    120,
+  );
   res.json(goals);
 });
 
@@ -240,6 +266,7 @@ app.post("/api/quinn/trigger/:workflow", async (req, res) => {
     return res.status(400).json({ error: `Invalid workflow. Valid: ${validWorkflows.join(", ")}` });
   }
   const jobId = await triggerWorkflow(schedulerQueue, workflow);
+  cacheInvalidate("*").catch(() => {});
   broadcast("workflow:started", { workflow, jobId });
   res.json({ jobId, workflow, status: "queued" });
 });
@@ -247,11 +274,16 @@ app.post("/api/quinn/trigger/:workflow", async (req, res) => {
 // ---- Agent Logs ----
 app.get("/api/logs", async (req, res) => {
   const { agent, limit } = req.query;
-  const logs = await prisma.agentLog.findMany({
-    where: agent ? { agentName: agent as never } : {},
-    orderBy: { createdAt: "desc" },
-    take: parseInt((limit as string) ?? "50", 10),
-  });
+  const cacheSegments: string[] = ["logs", (agent as string) || "all", (limit as string) || "50"];
+  const logs = await cacheGet(
+    cacheSegments,
+    () => prisma.agentLog.findMany({
+      where: agent ? { agentName: agent as never } : {},
+      orderBy: { createdAt: "desc" },
+      take: parseInt((limit as string) ?? "50", 10),
+    }),
+    30,
+  );
   res.json(logs);
 });
 
@@ -275,11 +307,24 @@ async function start() {
   // Start Telegram bot
   const telegramBot = createTelegramBot(graph);
   if (telegramBot) {
-    telegramBot.launch({ dropPendingUpdates: true }).then(() => {
-      console.log("  ✅ Telegram bot started — polling Telegram API");
-    }).catch((err) => {
-      console.error("  ❌ Telegram bot failed to start:", err);
-    });
+    const launchWithRetry = async (retries = 5, delay = 2_000): Promise<void> => {
+      for (let i = 0; i < retries; i++) {
+        try {
+          await telegramBot.launch({ dropPendingUpdates: true });
+          console.log("  ✅ Telegram bot started — polling Telegram API");
+          return;
+        } catch (err) {
+          const isLast = i === retries - 1;
+          console.error(`  ${isLast ? "❌" : "⚠️"} Telegram bot attempt ${i + 1}/${retries} failed: ${(err as Error).message}`);
+          if (isLast) {
+            console.error("  ❌ Telegram bot failed to start after all retries.");
+            return;
+          }
+          await new Promise((r) => setTimeout(r, delay * Math.pow(2, i)));
+        }
+      }
+    };
+    launchWithRetry();
   }
 
   // Start HTTP server

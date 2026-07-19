@@ -16,6 +16,9 @@
     "dev": "tsc --watch",
     "lint": "echo 'no lint configured'"
   },
+  "dependencies": {
+    "ioredis": "^5.4.0"
+  },
   "devDependencies": {
     "typescript": "^5.7.0"
   }
