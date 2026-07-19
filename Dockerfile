@@ -22,11 +22,7 @@ RUN corepack enable && corepack prepare pnpm@9 --activate
 
 ENV NODE_ENV=production
 
-COPY --from=builder /app/apps/api/dist ./apps/api/dist
-COPY --from=builder /app/packages ./packages
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/apps/api/package.json ./apps/api/
+COPY --from=builder /app .
 
 EXPOSE 4000
 CMD ["node", "apps/api/dist/index.js"]
