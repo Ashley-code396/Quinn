@@ -222,5 +222,83 @@ All external actions require approval. The flow is:
 5. On approval: action is executed (outreach email, content publish, etc.)
 6. Result is tracked and reported
 
+## Deployment
+
+All your infrastructure is already in production — Neon (PostgreSQL), Redis Cloud, and Agent Memory are all configured in `.env`. You just need to run the API server.
+
+### Option 1: PM2 (simplest — you're already on this server)
+
+```bash
+# Build all packages
+pnpm build --filter=@quinn/api --filter=@quinn/agents --filter=@quinn/database --filter=@quinn/scheduler --filter=@quinn/shared
+
+# Start with PM2
+pm2 start ecosystem.config.cjs
+
+# Save PM2 process list for auto-restart on reboot
+pm2 save
+pm2 startup
+```
+
+Alternatively, start directly:
+```bash
+node apps/api/dist/index.js
+```
+
+### Option 2: Docker
+
+```bash
+# Build image
+docker build -t quinn-api .
+
+# Run with your .env
+docker run -d --name quinn --restart unless-stopped \
+  --env-file .env \
+  -p 4000:4000 \
+  quinn-api
+```
+
+### Option 3: Fly.io
+
+```bash
+# Install flyctl and login
+fly launch --no-deploy
+fly secrets import < .env
+fly deploy
+```
+
+### Option 4: Railway
+
+1. Push repo to GitHub
+2. Connect repo to Railway
+3. Set `Root Directory` to `/`
+4. Set `Build Command` to `pnpm build --filter=@quinn/api --filter=@quinn/agents --filter=@quinn/database --filter=@quinn/scheduler --filter=@quinn/shared`
+5. Set `Start Command` to `node apps/api/dist/index.js`
+6. Add all env vars from `.env`
+
+### Environment Variables
+
+All must be set in the production environment:
+
+| Variable | Source |
+|----------|--------|
+| `DATABASE_URL` | Neon.tech dashboard |
+| `REDIS_URL` | Redis Cloud → Database → Connect |
+| `GROQ_API_KEY` | Groq console |
+| `TAVILY_API_KEY` | Tavily dashboard |
+| `TELEGRAM_BOT_TOKEN` | BotFather |
+| `TELEGRAM_ALLOWED_USERS` | Your Telegram user ID |
+| `AGENT_MEMORY_BASE_URL` | Redis Cloud → Agent Memory → Settings |
+| `AGENT_MEMORY_STORE_ID` | Redis Cloud → Agent Memory → Settings |
+| `AGENT_MEMORY_API_KEY` | Redis Cloud → Agent Memory → Settings |
+| `LANGSMITH_API_KEY` | LangSmith (optional) |
+
+### Verifying
+
+```bash
+curl http://your-server:4000/api/health
+# {"status":"ok","agent":"quinn","timestamp":"..."}
+```
+
 ## License
 Private — Dermaqea

@@ -1,0 +1,11 @@
+node_modules
+.git
+.gitignore
+*.md
+.env
+.env.*
+.next
+dist
+.turbo
+logs
+redisdata

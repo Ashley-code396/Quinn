@@ -12,9 +12,15 @@
     "db:migrate": "turbo run db:migrate --filter=@quinn/database",
     "db:seed": "turbo run db:seed --filter=@quinn/database",
     "db:studio": "turbo run db:studio --filter=@quinn/database",
-    "format": "prettier --write \"**/*.{ts,tsx,md,json}\""
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "start": "node apps/api/dist/index.js",
+    "pm2:start": "pm2 start ecosystem.config.cjs",
+    "pm2:stop": "pm2 stop quinn-api",
+    "pm2:restart": "pm2 restart quinn-api",
+    "pm2:logs": "pm2 logs quinn-api"
   },
   "devDependencies": {
+    "pm2": "^7.0.3",
     "prettier": "^3.3.0",
     "turbo": "^2.5.0",
     "typescript": "^5.7.0"
