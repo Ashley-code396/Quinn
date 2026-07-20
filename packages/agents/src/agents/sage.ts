@@ -5,7 +5,7 @@
  * competitors, conferences, grants, and industry trends.
  */
 
-import { ChatGroq } from "@langchain/groq";
+import { createModel, withFallback } from "../llm.js";
 import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import type { QuinnStateType } from "../state.js";
 import { buildSystemPrompt } from "../prompts/system.js";
@@ -56,11 +56,6 @@ For each organization discovered, capture:
 export async function sageNode(
   state: QuinnStateType,
 ): Promise<Partial<QuinnStateType>> {
-  const model = new ChatGroq({
-      model: "llama-3.3-70b-versatile",
-     temperature: 0.4,
-   });
-
   // Retrieve memories relevant to current research task
   const lastMessage = state.messages[state.messages.length - 1];
   const taskDescription = lastMessage?.content?.toString() ?? "research opportunities for Dermaqea";
@@ -76,15 +71,8 @@ export async function sageNode(
 
   const systemPrompt = buildSystemPrompt("sage", SAGE_CONTEXT + memoryContext);
 
-  const modelWithTools = model.bindTools([
-    searchWebTool,
-    extractWebContentTool,
-    searchOrganizationsTool,
-    upsertOrganizationTool,
-    logAgentActionTool,
-  ]);
+  const sageTools = [searchWebTool, extractWebContentTool, searchOrganizationsTool, upsertOrganizationTool, logAgentActionTool];
 
-  // Run Sage's research cycle
   const sageMessages = [
     new SystemMessage(systemPrompt),
     ...state.messages.slice(-5),
@@ -92,9 +80,14 @@ export async function sageNode(
   if (lastMessageType(sageMessages) !== "human") {
     sageMessages.push(new HumanMessage("Proceed with research using the context above."));
   }
-  let response = await modelWithTools.invoke(sageMessages);
 
-  const sageTools = [searchWebTool, extractWebContentTool, searchOrganizationsTool, upsertOrganizationTool, logAgentActionTool];
+  let response = await withFallback(
+    async (model) => {
+      const modelWithTools = model.bindTools(sageTools);
+      return await modelWithTools.invoke(sageMessages);
+    },
+    { temperature: 0.4 },
+  );
 
   if (response.tool_calls?.length && !response.content?.toString().trim()) {
     const toolResults: string[] = [];
@@ -108,7 +101,10 @@ export async function sageNode(
     const followUp = new HumanMessage(
       `Tool results:\n\n${toolResults.join("\n\n")}\n\nSummarize your research findings based on these results.`
     );
-    response = await model.invoke([...sageMessages, response, followUp]);
+    response = await withFallback(
+      async (model) => model.invoke([...sageMessages, response, followUp]),
+      { temperature: 0.4 },
+    );
   }
 
   const sageContent = response.content?.toString()?.trim() || "Research cycle complete. No new findings at this time.";

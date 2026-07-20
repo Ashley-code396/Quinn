@@ -5,7 +5,7 @@
  * Produces the final executive briefing with prioritized recommendations.
  */
 
-import { ChatGroq } from "@langchain/groq";
+import { createModel, withFallback } from "../llm.js";
 import { HumanMessage, SystemMessage, AIMessage, BaseMessage } from "@langchain/core/messages";
 import type { QuinnStateType } from "../state.js";
 import { prisma } from "@quinn/database";
@@ -68,10 +68,6 @@ Any urgent items or risks to flag.
 Be specific, actionable, and strategic. The founder should be able to read this in 5 minutes and know exactly what needs attention.`;
 
 export async function synthesizeNode(state: QuinnStateType): Promise<Partial<QuinnStateType>> {
-  const model = new ChatGroq({
-    model: "llama-3.3-70b-versatile",
-    temperature: 0.3,
-  });
 
   let originalQuestion = "";
   try {
@@ -106,7 +102,10 @@ export async function synthesizeNode(state: QuinnStateType): Promise<Partial<Qui
   if (!originalQuestion) {
     synthMessages.push(new HumanMessage("Synthesize the findings."));
   }
-  const response = await model.invoke(synthMessages);
+  const response = await withFallback(
+    async (model) => model.invoke(synthMessages),
+    { temperature: 0.3 },
+  );
 
   const briefingContent = response.content?.toString() ?? "Briefing generation failed.";
 

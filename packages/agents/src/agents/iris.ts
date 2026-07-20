@@ -5,7 +5,7 @@
  * and ensures no relationship goes cold.
  */
 
-import { ChatGroq } from "@langchain/groq";
+import { createModel, withFallback } from "../llm.js";
 import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import type { QuinnStateType } from "../state.js";
 import { buildSystemPrompt } from "../prompts/system.js";
@@ -48,10 +48,6 @@ const IRIS_CONTEXT = `
 export async function irisNode(
   state: QuinnStateType,
 ): Promise<Partial<QuinnStateType>> {
-   const model = new ChatGroq({
-      model: "llama-3.3-70b-versatile",
-      temperature: 0.2,
-    });
   const lastMessage = state.messages[state.messages.length - 1];
   const taskDescription = lastMessage?.content?.toString() ?? "check relationships and follow-ups";
 
@@ -66,12 +62,8 @@ export async function irisNode(
 
   const systemPrompt = buildSystemPrompt("iris", IRIS_CONTEXT + memoryContext);
 
-  const modelWithTools = model.bindTools([
-    getFollowUpsDueTool,
-    searchOrganizationsTool,
-    createApprovalTool,
-    logAgentActionTool,
-  ]);
+  const irisTools = [getFollowUpsDueTool, searchOrganizationsTool, createApprovalTool, logAgentActionTool];
+
 
   const irisMessages = [
     new SystemMessage(systemPrompt),
@@ -80,9 +72,14 @@ export async function irisNode(
   if (lastMessageType(irisMessages) !== "human") {
     irisMessages.push(new HumanMessage("Proceed with relationship management."));
   }
-  let response = await modelWithTools.invoke(irisMessages);
+  let response = await withFallback(
+    async (model) => {
+      const modelWithTools = model.bindTools(irisTools);
+      return await modelWithTools.invoke(irisMessages);
+    },
+    { temperature: 0.2 },
+  );
 
-  const irisTools = [getFollowUpsDueTool, searchOrganizationsTool, createApprovalTool, logAgentActionTool];
 
   if (response.tool_calls?.length && !response.content?.toString().trim()) {
     const toolResults: string[] = [];
@@ -96,7 +93,10 @@ export async function irisNode(
     const followUp = new HumanMessage(
       `Tool results:\n\n${toolResults.join("\n\n")}\n\nSummarize your relationship management findings based on these results.`
     );
-    response = await model.invoke([...irisMessages, response, followUp]);
+    response = await withFallback(
+      async (model) => model.invoke([...irisMessages, response, followUp]),
+      { temperature: 0.2 },
+    );
   }
 
   const irisContent = response.content?.toString()?.trim() || "Relationship check complete.";
@@ -130,3 +130,4 @@ export async function irisNode(
     ],
   };
 }
+

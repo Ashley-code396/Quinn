@@ -5,7 +5,7 @@
  * and ensures brand voice consistency.
  */
 
-import { ChatGroq } from "@langchain/groq";
+import { createModel, withFallback } from "../llm.js";
 import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import type { QuinnStateType } from "../state.js";
 import { buildSystemPrompt } from "../prompts/system.js";
@@ -51,10 +51,6 @@ const NOVA_CONTEXT = `
 export async function novaNode(
   state: QuinnStateType,
 ): Promise<Partial<QuinnStateType>> {
-  const model = new ChatGroq({
-      model: "llama-3.3-70b-versatile",
-     temperature: 0.7,
-   });
 
   const lastMessage = state.messages[state.messages.length - 1];
   const taskDescription = lastMessage?.content?.toString() ?? "generate content ideas";
@@ -71,13 +67,8 @@ export async function novaNode(
 
   const systemPrompt = buildSystemPrompt("nova", NOVA_CONTEXT + memoryContext);
 
-  const modelWithTools = model.bindTools([
-    searchWebTool,
-    getContentItemsTool,
-    createContentItemTool,
-    createApprovalTool,
-    logAgentActionTool,
-  ]);
+  const novaTools = [searchWebTool, getContentItemsTool, createContentItemTool, createApprovalTool, logAgentActionTool];
+
 
   const novaMessages = [
     new SystemMessage(systemPrompt),
@@ -86,9 +77,14 @@ export async function novaNode(
   if (lastMessageType(novaMessages) !== "human") {
     novaMessages.push(new HumanMessage("Proceed with content generation using the context above."));
   }
-  let response = await modelWithTools.invoke(novaMessages);
+  let response = await withFallback(
+    async (model) => {
+      const modelWithTools = model.bindTools(novaTools);
+      return await modelWithTools.invoke(novaMessages);
+    },
+    { temperature: 0.7 },
+  );
 
-  const novaTools = [searchWebTool, getContentItemsTool, createContentItemTool, createApprovalTool, logAgentActionTool];
 
   if (response.tool_calls?.length && !response.content?.toString().trim()) {
     const toolResults: string[] = [];
@@ -102,7 +98,10 @@ export async function novaNode(
     const followUp = new HumanMessage(
       `Tool results:\n\n${toolResults.join("\n\n")}\n\nSummarize your content findings based on these results.`
     );
-    response = await model.invoke([...novaMessages, response, followUp]);
+    response = await withFallback(
+      async (model) => model.invoke([...novaMessages, response, followUp]),
+      { temperature: 0.7 },
+    );
   }
 
   const novaContent = response.content?.toString()?.trim() || "Content generation cycle complete.";
@@ -136,3 +135,4 @@ export async function novaNode(
     ],
   };
 }
+

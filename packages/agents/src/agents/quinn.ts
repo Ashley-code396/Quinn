@@ -6,7 +6,6 @@
  * executive recommendations.
  */
 
-import { ChatGroq } from "@langchain/groq";
 import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import { z } from "zod";
 import type { QuinnStateType } from "../state.js";
@@ -15,6 +14,7 @@ import { buildSystemPrompt } from "../prompts/system.js";
 import { searchMemories, isRedisMemoryConfigured, searchLongTermMemory } from "../memory/index.js";
 import { getCurrentQuarter } from "@quinn/shared";
 import { lastMessageType } from "../messages.js";
+import { createModel, withFallback } from "../llm.js";
 
 const QUINN_ADDITIONAL_CONTEXT = `
 # Your Role
@@ -89,11 +89,6 @@ export async function quinnNode(
     };
   }
 
-  const model = new ChatGroq({
-    model: "llama-3.3-70b-versatile",
-    temperature: 0.3,
-  });
-
   // Retrieve relevant memories for context
   const relevantMemories = isRedisMemoryConfigured()
     ? await searchLongTermMemory({
@@ -132,8 +127,6 @@ export async function quinnNode(
     QUINN_ADDITIONAL_CONTEXT + memoryContext + agentReportContext + consultedContext,
   );
 
-  const structured = model.withStructuredOutput(routingSchema);
-
   const messagesForModel = [
     new SystemMessage(systemPrompt),
     ...state.messages,
@@ -142,7 +135,13 @@ export async function quinnNode(
     messagesForModel.push(new HumanMessage("Continue with your analysis and decide what to do next."));
   }
 
-  const result = await structured.invoke(messagesForModel);
+  const result = await withFallback(
+    async (model) => {
+      const structured = model.withStructuredOutput(routingSchema);
+      return await structured.invoke(messagesForModel);
+    },
+    { temperature: 0.3 },
+  );
 
   return {
     next: result.nextAgent,

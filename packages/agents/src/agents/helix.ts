@@ -2,7 +2,7 @@
  * Helix — Presentation & Asset Agent
  */
 
-import { ChatGroq } from "@langchain/groq";
+import { createModel, withFallback } from "../llm.js";
 import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import type { QuinnStateType } from "../state.js";
 import { buildSystemPrompt } from "../prompts/system.js";
@@ -21,10 +21,6 @@ Submit all materials for approval before sharing.
 `;
 
 export async function helixNode(state: QuinnStateType): Promise<Partial<QuinnStateType>> {
-   const model = new ChatGroq({
-      model: "llama-3.3-70b-versatile",
-      temperature: 0.3,
-    });
   const lastMessage = state.messages[state.messages.length - 1];
   const taskDesc = lastMessage?.content?.toString() ?? "prepare marketing materials";
 
@@ -33,7 +29,8 @@ export async function helixNode(state: QuinnStateType): Promise<Partial<QuinnSta
     ? `\n# Relevant Knowledge & Previous Materials\n${memories.map((m) => `[${m.category}] ${m.content}`).join("\n")}`
     : "";
 
-  const modelWithTools = model.bindTools([createApprovalTool, logAgentActionTool]);
+  const helixTools = [createApprovalTool, logAgentActionTool];
+
   const helixMessages = [
     new SystemMessage(buildSystemPrompt("helix", HELIX_CONTEXT + memCtx)),
     ...state.messages.slice(-5),
@@ -41,9 +38,14 @@ export async function helixNode(state: QuinnStateType): Promise<Partial<QuinnSta
   if (lastMessageType(helixMessages) !== "human") {
     helixMessages.push(new HumanMessage("Proceed with marketing materials preparation."));
   }
-  let response = await modelWithTools.invoke(helixMessages);
+  let response = await withFallback(
+    async (model) => {
+      const modelWithTools = model.bindTools(helixTools);
+      return await modelWithTools.invoke(helixMessages);
+    },
+    { temperature: 0.3 },
+  );
 
-  const helixTools = [createApprovalTool, logAgentActionTool];
 
   if (response.tool_calls?.length && !response.content?.toString().trim()) {
     const toolResults: string[] = [];
@@ -57,7 +59,10 @@ export async function helixNode(state: QuinnStateType): Promise<Partial<QuinnSta
     const followUp = new HumanMessage(
       `Tool results:\n\n${toolResults.join("\n\n")}\n\nSummarize your findings based on these results.`
     );
-    response = await model.invoke([...helixMessages, response, followUp]);
+    response = await withFallback(
+      async (model) => model.invoke([...helixMessages, response, followUp]),
+      { temperature: 0.3 },
+    );
   }
 
   const helixContent = response.content?.toString()?.trim() || "Asset preparation complete.";
@@ -72,3 +77,4 @@ export async function helixNode(state: QuinnStateType): Promise<Partial<QuinnSta
     agentReports: [{ agentName: "helix", summary: "Presentation & asset report", findings: [helixContent.slice(0, 500)], recommendations: [], actionItems: [], timestamp: new Date() }],
   };
 }
+
