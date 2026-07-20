@@ -129,11 +129,14 @@ export async function quinnNode(
 
   const messagesForModel = [
     new SystemMessage(systemPrompt),
-    ...state.messages,
+    ...recentMessages,
   ];
   if (lastMessageType(messagesForModel) !== "human") {
     messagesForModel.push(new HumanMessage("Continue with your analysis and decide what to do next."));
   }
+
+  // Limit message history to last 10 exchanges to stay within token limits
+  const recentMessages = state.messages.slice(-10);
 
   const result = await withFallback(
     async (model) => {
