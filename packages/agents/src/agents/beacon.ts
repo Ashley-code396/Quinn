@@ -1,7 +1,7 @@
 /**
  * Beacon — Analytics Agent
  */
-import { ChatGroq } from "@langchain/groq";
+import { createModel, withFallback } from "../llm.js";
 import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import type { QuinnStateType } from "../state.js";
 import { buildSystemPrompt } from "../prompts/system.js";
@@ -20,10 +20,6 @@ Flag metrics that are behind target as risks.
 `;
 
 export async function beaconNode(state: QuinnStateType): Promise<Partial<QuinnStateType>> {
-   const model = new ChatGroq({
-      model: "llama-3.3-70b-versatile",
-      temperature: 0.2,
-    });
   const lastMessage = state.messages[state.messages.length - 1];
   const taskDesc = lastMessage?.content?.toString() ?? "analyze marketing performance";
 
@@ -32,7 +28,8 @@ export async function beaconNode(state: QuinnStateType): Promise<Partial<QuinnSt
     ? `\n# Relevant Knowledge & Previous Analytics\n${memories.map((m) => `[${m.category}] ${m.content}`).join("\n")}`
     : "";
 
-  const modelWithTools = model.bindTools([searchWebTool, getAnalyticsSnapshotsTool, getQuarterlyGoalsTool, logAgentActionTool]);
+  const beaconTools = [searchWebTool, getAnalyticsSnapshotsTool, getQuarterlyGoalsTool, logAgentActionTool];
+
   const beaconMessages = [
     new SystemMessage(buildSystemPrompt("beacon", BEACON_CONTEXT + memCtx)),
     ...state.messages.slice(-5),
@@ -40,9 +37,13 @@ export async function beaconNode(state: QuinnStateType): Promise<Partial<QuinnSt
   if (lastMessageType(beaconMessages) !== "human") {
     beaconMessages.push(new HumanMessage("Proceed with analytics review."));
   }
-  let response = await modelWithTools.invoke(beaconMessages);
-
-  const beaconTools = [searchWebTool, getAnalyticsSnapshotsTool, getQuarterlyGoalsTool, logAgentActionTool];
+  let response = await withFallback(
+    async (model) => {
+      const modelWithTools = model.bindTools(beaconTools);
+      return await modelWithTools.invoke(beaconMessages);
+    },
+    { temperature: 0.2 },
+  );
 
   if (response.tool_calls?.length && !response.content?.toString().trim()) {
     const toolResults: string[] = [];
@@ -56,7 +57,10 @@ export async function beaconNode(state: QuinnStateType): Promise<Partial<QuinnSt
     const followUp = new HumanMessage(
       `Tool results:\n\n${toolResults.join("\n\n")}\n\nSummarize your analytics findings based on these results.`
     );
-    response = await model.invoke([...beaconMessages, response, followUp]);
+    response = await withFallback(
+      async (model) => model.invoke([...beaconMessages, response, followUp]),
+      { temperature: 0.2 },
+    );
   }
 
   const beaconContent = response.content?.toString()?.trim() || "Analytics review complete.";

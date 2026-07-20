@@ -5,7 +5,7 @@
  * this pipeline: classify → extract → embed → store → task → strategize.
  */
 
-import { ChatGroq } from "@langchain/groq";
+import { createModel, withFallback } from "../llm.js";
 import { storeMemory, searchMemories, generateEmbedding } from "../memory/index.js";
 import type { AgentName } from "@quinn/database";
 
@@ -105,15 +105,13 @@ Return JSON:
 }`;
 
 async function classify(text: string): Promise<ClassificationResult> {
-  const model = new ChatGroq({
-    model: "llama-3.3-70b-versatile",
-    temperature: 0.1,
-  });
-
-  const response = await model.invoke([
-    { role: "system", content: CLASSIFICATION_PROMPT },
-    { role: "user", content: text },
-  ]);
+  const response = await withFallback(
+    async (model) => model.invoke([
+      { role: "system", content: CLASSIFICATION_PROMPT },
+      { role: "user", content: text },
+    ]),
+    { temperature: 0.1 },
+  );
 
   const content = response.content?.toString() ?? "{}";
   const json = extractJson(content) as Record<string, unknown>;
@@ -134,17 +132,15 @@ async function evaluateStrategicImpact(
   text: string,
   context: string,
 ): Promise<Record<string, unknown>> {
-  const model = new ChatGroq({
-    model: "llama-3.3-70b-versatile",
-    temperature: 0.1,
-  });
-
   const prompt = STRATEGIC_PROMPT.replace("{input}", text).replace("{context}", context);
 
-  const response = await model.invoke([
-    { role: "system", content: prompt },
-    { role: "user", content: "Evaluate this information." },
-  ]);
+  const response = await withFallback(
+    async (model) => model.invoke([
+      { role: "system", content: prompt },
+      { role: "user", content: "Evaluate this information." },
+    ]),
+    { temperature: 0.1 },
+  );
 
   const content = response.content?.toString() ?? "{}";
   return extractJson(content) as Record<string, unknown>;
@@ -156,21 +152,19 @@ async function createTasks(
   entities: { type: string; name: string }[],
   suggestedAgents: string[],
 ): Promise<{ agent: string; action: string; reasoning: string; priority: string }[]> {
-  const model = new ChatGroq({
-    model: "llama-3.3-70b-versatile",
-    temperature: 0.1,
-  });
-
   const prompt = TASK_CREATION_PROMPT
     .replace("{summary}", summary)
     .replace("{category}", category)
     .replace("{entities}", JSON.stringify(entities))
     .replace("{suggestedAgents}", JSON.stringify(suggestedAgents));
 
-  const response = await model.invoke([
-    { role: "system", content: prompt },
-    { role: "user", content: "Create tasks based on this knowledge." },
-  ]);
+  const response = await withFallback(
+    async (model) => model.invoke([
+      { role: "system", content: prompt },
+      { role: "user", content: "Create tasks based on this knowledge." },
+    ]),
+    { temperature: 0.1 },
+  );
 
   const content = response.content?.toString() ?? '{"tasks": []}';
   const json = extractJson(content) as { tasks?: { agent: string; action: string; reasoning: string; priority: string }[] };

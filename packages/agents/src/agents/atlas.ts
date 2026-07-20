@@ -4,7 +4,7 @@
  * Discovers and evaluates growth opportunities: partnerships,
  * grants, accelerators, conferences, pilot customers.
  */
-import { ChatGroq } from "@langchain/groq";
+import { createModel, withFallback } from "../llm.js";
 import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import type { QuinnStateType } from "../state.js";
 import { buildSystemPrompt } from "../prompts/system.js";
@@ -48,10 +48,6 @@ Score every opportunity on:
 export async function atlasNode(
   state: QuinnStateType,
 ): Promise<Partial<QuinnStateType>> {
-  const model = new ChatGroq({
-      model: "llama-3.3-70b-versatile",
-     temperature: 0.3,
-   });
   const lastMessage = state.messages[state.messages.length - 1];
   const taskDescription = lastMessage?.content?.toString() ?? "find growth opportunities";
 
@@ -66,14 +62,7 @@ export async function atlasNode(
 
   const systemPrompt = buildSystemPrompt("atlas", ATLAS_CONTEXT + memoryContext);
 
-  const modelWithTools = model.bindTools([
-    searchWebTool,
-    extractWebContentTool,
-    getOpportunitiesTool,
-    searchOrganizationsTool,
-    createApprovalTool,
-    logAgentActionTool,
-  ]);
+  const atlasTools = [searchWebTool, extractWebContentTool, getOpportunitiesTool, searchOrganizationsTool, createApprovalTool, logAgentActionTool];
 
   const atlasMessages = [
     new SystemMessage(systemPrompt),
@@ -82,9 +71,13 @@ export async function atlasNode(
   if (lastMessageType(atlasMessages) !== "human") {
     atlasMessages.push(new HumanMessage("Proceed with growth opportunity analysis."));
   }
-  let response = await modelWithTools.invoke(atlasMessages);
-
-  const atlasTools = [searchWebTool, extractWebContentTool, getOpportunitiesTool, searchOrganizationsTool, createApprovalTool, logAgentActionTool];
+  let response = await withFallback(
+    async (model) => {
+      const modelWithTools = model.bindTools(atlasTools);
+      return await modelWithTools.invoke(atlasMessages);
+    },
+    { temperature: 0.3 },
+  );
 
   if (response.tool_calls?.length && !response.content?.toString().trim()) {
     const toolResults: string[] = [];
@@ -98,7 +91,10 @@ export async function atlasNode(
     const followUp = new HumanMessage(
       `Tool results:\n\n${toolResults.join("\n\n")}\n\nSummarize your growth analysis findings based on these results.`
     );
-    response = await model.invoke([...atlasMessages, response, followUp]);
+    response = await withFallback(
+      async (model) => model.invoke([...atlasMessages, response, followUp]),
+      { temperature: 0.3 },
+    );
   }
 
   const atlasContent = response.content?.toString()?.trim() || "Growth analysis complete with opportunity evaluation.";
