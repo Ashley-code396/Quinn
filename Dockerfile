@@ -1,4 +1,4 @@
-FROM node:22-alpine AS builder
+FROM node:22-slim AS builder
 WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@9 --activate
@@ -12,12 +12,13 @@ COPY packages/shared/package.json ./packages/shared/
 
 RUN pnpm install --frozen-lockfile
 
+COPY packages/database/prisma ./packages/database/prisma
 RUN pnpm --filter=@quinn/database db:generate
 
 COPY . .
 RUN pnpm build --filter=@quinn/api --filter=@quinn/agents --filter=@quinn/database --filter=@quinn/scheduler --filter=@quinn/shared
 
-FROM node:22-alpine
+FROM node:22-slim
 WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@9 --activate

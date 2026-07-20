@@ -4,6 +4,14 @@
  * Express REST API + WebSocket server for the Quinn dashboard.
  */
 
+process.on("unhandledRejection", (reason) => {
+  console.error("UNHANDLED REJECTION:", reason);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("UNCAUGHT EXCEPTION:", err);
+});
+
 import dotenv from "dotenv";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -11,6 +19,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: resolve(__dirname, "../../../.env") });
 
 import express from "express";
+import type { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import { createServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
@@ -20,7 +29,7 @@ import type { QuinnGraph } from "@quinn/agents";
 import { createScheduler, createWorker, triggerWorkflow } from "@quinn/scheduler";
 import type { Queue } from "bullmq";
 import { executeApprovedAction } from "@quinn/agents";
-import { cacheGet, cacheDel, cacheInvalidate } from "@quinn/shared";
+import { cacheGet, cacheDel, cacheInvalidate, closeRedis } from "@quinn/shared";
 
 const app = express();
 const PORT = parseInt(process.env.PORT ?? process.env.API_PORT ?? "4000", 10);
@@ -50,8 +59,16 @@ function broadcast(type: string, payload: unknown) {
 }
 
 // ---- Health ----
-app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", agent: "quinn", timestamp: new Date() });
+app.get("/api/health", async (_req, res) => {
+  const dbOk = await (async () => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      return true;
+    } catch { return false; }
+  })();
+
+  if (!dbOk) return res.status(503).json({ status: "error", database: "disconnected" });
+  res.json({ status: "ok", agent: "quinn", database: "connected", timestamp: new Date() });
 });
 
 // ---- Briefings ----
@@ -287,24 +304,39 @@ app.get("/api/logs", async (req, res) => {
   res.json(logs);
 });
 
+// ---- Error handler ----
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  console.error("Unhandled error:", err);
+  res.status(500).json({ error: "Internal server error" });
+});
+
 // ---- Startup ----
 async function start() {
+  if (!process.env.GROQ_API_KEY) {
+    console.error("FATAL: GROQ_API_KEY is not set. Agents cannot function.");
+    process.exit(1);
+  }
+
   console.log("\n🚀 Starting Quinn API Server...\n");
 
-  // Initialize the Quinn graph
   graph = await buildQuinnGraph();
   console.log("  ✅ Quinn agent graph compiled");
 
-  // Initialize scheduler
-  const scheduler = await createScheduler();
-  schedulerQueue = scheduler.queue;
-  console.log("  ✅ Scheduler initialized");
+  try {
+    const scheduler = await createScheduler();
+    schedulerQueue = scheduler.queue;
+    console.log("  ✅ Scheduler initialized");
+  } catch (err) {
+    console.error("  ⚠️ Scheduler initialization failed (non-fatal):", (err as Error).message);
+  }
 
-  // Start scheduler worker
-  await createWorker();
-  console.log("  ✅ Scheduler worker started");
+  try {
+    await createWorker();
+    console.log("  ✅ Scheduler worker started");
+  } catch (err) {
+    console.error("  ⚠️ Scheduler worker failed (non-fatal):", (err as Error).message);
+  }
 
-  // Start Telegram bot
   const telegramBot = createTelegramBot(graph);
   if (telegramBot) {
     const launchWithRetry = async (retries = 5, delay = 2_000): Promise<void> => {
@@ -324,10 +356,9 @@ async function start() {
         }
       }
     };
-    launchWithRetry();
+    launchWithRetry().catch((err) => console.error("Telegram bot launch error:", err));
   }
 
-  // Start HTTP server
   server.listen(PORT, () => {
     console.log(`\n🌐 Quinn API running at http://localhost:${PORT}`);
     console.log(`📡 WebSocket at ws://localhost:${PORT}/ws`);
@@ -339,3 +370,14 @@ start().catch((err) => {
   console.error("Failed to start Quinn:", err);
   process.exit(1);
 });
+
+// ---- Graceful shutdown ----
+async function shutdown(signal: string) {
+  console.log(`\n${signal} received. Shutting down gracefully...`);
+  server.close();
+  await closeRedis().catch(() => {});
+  await prisma.$disconnect().catch(() => {});
+  process.exit(0);
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
