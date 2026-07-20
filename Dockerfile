@@ -12,6 +12,8 @@ COPY packages/shared/package.json ./packages/shared/
 
 RUN pnpm install --frozen-lockfile
 
+RUN pnpm --filter=@quinn/database db:generate
+
 COPY . .
 RUN pnpm build --filter=@quinn/api --filter=@quinn/agents --filter=@quinn/database --filter=@quinn/scheduler --filter=@quinn/shared
 
