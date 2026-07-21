@@ -7,7 +7,7 @@
 
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
-import { prisma, OpportunityType, OpportunityStatus, AgentName, OutreachStatus } from "@quinn/database";
+import { prisma, ContentType, OpportunityType, OpportunityStatus, AgentName, OutreachStatus } from "@quinn/database";
 
 /**
  * Search organizations in the database.
@@ -211,13 +211,31 @@ export const getContentItemsTool = tool(
   },
 );
 
+const contentTypeMap: Record<string, string> = {
+  "linkedin post": "LINKEDIN_POST",
+  "linkedin": "LINKEDIN_POST",
+  "blog article": "BLOG_ARTICLE",
+  "blog": "BLOG_ARTICLE",
+  "founder update": "FOUNDER_UPDATE",
+  "educational": "EDUCATIONAL",
+  "technical explainer": "TECHNICAL_EXPLAINER",
+  "whitepaper": "WHITEPAPER",
+  "case study": "CASE_STUDY",
+  "newsletter": "NEWSLETTER",
+  "social media": "SOCIAL_MEDIA",
+  "product announcement": "PRODUCT_ANNOUNCEMENT",
+  "counterfeit awareness": "COUNTERFEIT_AWARENESS",
+  "press release": "PRESS_RELEASE",
+};
+
 /**
  * Create a content item.
  */
 export const createContentItemTool = tool(
   async (params) => {
+    const type = contentTypeMap[params.type?.toLowerCase().trim()] ?? params.type?.toUpperCase() ?? "LINKEDIN_POST";
     const item = await prisma.contentItem.create({
-      data: params as never,
+      data: { ...params, type } as never,
     });
     return JSON.stringify(item, null, 2);
   },
