@@ -2,7 +2,7 @@ import { Telegraf, Markup } from "telegraf";
 import type { Context } from "telegraf";
 import { prisma } from "@quinn/database";
 import type { QuinnGraph } from "../graph.js";
-import { chatWithQuinn } from "../workflows/index.js";
+import { chatWithQuinn, runDailyBriefing, runWeeklyReport, runWeeklyPriorities, runQuarterlyPlanning } from "../workflows/index.js";
 import { isRedisMemoryConfigured, storeSessionEvent } from "../memory/index.js";
 import { executeApprovedAction } from "../executor/index.js";
 
@@ -108,6 +108,42 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
       return ctx.reply("⛔ Unauthorized.");
     }
     return next();
+  });
+
+  const WORKFLOWS: Record<string, (g: QuinnGraph) => Promise<unknown>> = {
+    "research-sweep": (g) => chatWithQuinn(g, "Run a research sweep. Ask Sage to search for new industry developments, competitor news, and emerging opportunities."),
+    "analytics-snapshot": (g) => chatWithQuinn(g, "Run the analytics snapshot. Ask Beacon to review all KPIs, check quarterly goal progress, and flag any anomalies or metrics behind target."),
+    "content-generation": (g) => chatWithQuinn(g, "Run morning content generation. Ask Nova to review the content calendar, generate a LinkedIn post for today, generate any content due soon, and create draft content for the rest of this week. Submit all content for approval."),
+    "daily-briefing": (g) => runDailyBriefing(g),
+    "follow-up-check": (g) => chatWithQuinn(g, "Run a follow-up check. Ask Iris to review all relationships for overdue follow-ups, expiring opportunities, and CRM items needing attention today."),
+    "weekly-priorities": (g) => runWeeklyPriorities(g),
+    "weekly-report": (g) => runWeeklyReport(g),
+    "quarterly-planning": (g) => runQuarterlyPlanning(g),
+  };
+
+  bot.command("trigger", async (ctx) => {
+    const args = ctx.message.text.split(/\s+/).slice(1);
+    const workflow = args[0];
+    if (!workflow || !WORKFLOWS[workflow]) {
+      const list = Object.keys(WORKFLOWS).join("\n");
+      await ctx.reply(`Available workflows:\n${list}\n\nUsage: /trigger <workflow>`);
+      return;
+    }
+    await ctx.reply(`⏳ Running ${workflow}...`);
+    try {
+      await WORKFLOWS[workflow](graph);
+      await ctx.reply(`✅ ${workflow} completed.`);
+      await pushApprovalsToTelegram();
+    } catch (err) {
+      await ctx.reply(`❌ ${workflow} failed: ${(err as Error).message}`);
+    }
+  });
+
+  bot.command("start", async (ctx) => {
+    await ctx.reply(
+      "I'm Quinn, your AI CMO. Send me a message or use /trigger <workflow> to run a scheduled workflow on demand.\n\nWorkflows:\n" +
+      Object.keys(WORKFLOWS).map((w) => `  /trigger ${w}`).join("\n")
+    );
   });
 
   bot.on("text", async (ctx) => {
