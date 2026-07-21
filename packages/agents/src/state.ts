@@ -18,11 +18,11 @@ import type {
  * Main graph state for the Quinn CMO system.
  */
 export const QuinnState = Annotation.Root({
-  /** Conversation message history (capped at 40 messages = 20 exchanges) */
+  /** Conversation message history (capped at 10 messages) */
   messages: Annotation<BaseMessage[]>({
     reducer: (existing, incoming) => {
       const combined = existing.concat(incoming);
-      return combined.length > 40 ? combined.slice(-40) : combined;
+      return combined.length > 10 ? combined.slice(-10) : combined;
     },
     default: () => [],
   }),
