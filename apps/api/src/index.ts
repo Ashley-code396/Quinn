@@ -2,6 +2,7 @@
  * Quinn API Server
  *
  * Express REST API + WebSocket server for the Quinn dashboard.
+ * Redeploy trigger: add /trigger telegram command support.
  */
 
 process.on("unhandledRejection", (reason) => {
