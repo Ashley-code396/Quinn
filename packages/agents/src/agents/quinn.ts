@@ -88,8 +88,13 @@ const routingSchema = z.object({
 export async function quinnNode(
   state: QuinnStateType,
 ): Promise<Partial<QuinnStateType>> {
+  const lastMsg = state.messages[state.messages.length - 1];
+  const isNewUserMessage = lastMsg?._getType() === "human";
+  const iterationCount = isNewUserMessage ? 0 : state.iterationCount;
+  const consultedAgents = isNewUserMessage ? [] : state.consultedAgents;
+
   // Safety: prevent infinite delegation loops
-  if (state.iterationCount >= MAX_ITERATIONS) {
+  if (iterationCount >= MAX_ITERATIONS) {
     return {
       next: "__end__",
       messages: [
@@ -132,8 +137,8 @@ export async function quinnNode(
       : "";
 
   const consultedContext =
-    state.consultedAgents.length > 0
-      ? `\nAgents already consulted this session: ${state.consultedAgents.join(", ")}`
+    consultedAgents.length > 0
+      ? `\nAgents already consulted this session: ${consultedAgents.join(", ")}`
       : "";
 
   const systemPrompt = buildSystemPrompt(
@@ -168,7 +173,7 @@ export async function quinnNode(
         name: "quinn",
       }),
     ],
-    iterationCount: state.iterationCount + 1,
-    consultedAgents: [result.nextAgent as never],
+    iterationCount: iterationCount + 1,
+    consultedAgents: [...consultedAgents, result.nextAgent as never],
   };
 }
