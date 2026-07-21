@@ -4,29 +4,25 @@ import { prisma } from "@quinn/database";
 import type { QuinnGraph } from "../graph.js";
 import { chatWithQuinn } from "../workflows/index.js";
 import { isRedisMemoryConfigured, storeSessionEvent } from "../memory/index.js";
+import { executeApprovedAction } from "../executor/index.js";
+
+let botInstance: Telegraf | null = null;
+let authorizedChatId: string | null = null;
 
 function sanitizeMarkdown(text: string): string {
   let result = text;
-
   if ((result.match(/\*\*/g)?.length ?? 0) % 2 !== 0) result += "**";
-
   const withoutBold = result.replace(/\*\*/g, "");
   if ((withoutBold.match(/(?<!\*)\*(?!\*)/g)?.length ?? 0) % 2 !== 0) result += "*";
-
   if ((result.match(/`/g)?.length ?? 0) % 2 !== 0) result += "`";
-
   if ((result.match(/~/g)?.length ?? 0) % 2 !== 0) result += "~";
-
   if ((result.match(/_/g)?.length ?? 0) % 2 !== 0) result += "_";
-
   const openBracket = result.lastIndexOf("[");
   const closeBracket = result.lastIndexOf("]");
   const openParen = result.lastIndexOf("(");
   const closeParen = result.lastIndexOf(")");
-
   if (openBracket > closeBracket) result += "]";
   if (openParen > closeParen && openParen > closeBracket) result += ")";
-
   return result;
 }
 
@@ -46,6 +42,57 @@ function isAllowed(ctx: Context): boolean {
   return allowed;
 }
 
+export async function pushApprovalsToTelegram(): Promise<void> {
+  const bot = botInstance;
+  const chatId = authorizedChatId ?? process.env.TELEGRAM_CHAT_ID ?? null;
+  if (!bot || !chatId) return;
+
+  const pending = await prisma.approval.findMany({
+    where: { status: "PENDING" },
+    orderBy: { createdAt: "asc" },
+    take: 5,
+  });
+
+  for (const approval of pending) {
+    const content = typeof approval.content === "string"
+      ? approval.content
+      : (approval.content as Record<string, unknown>)?.body as string ?? JSON.stringify(approval.content, null, 2);
+
+    const preview = content.length > 200 ? content.slice(0, 200) + "..." : content;
+
+    const message = [
+      `✍️ *${approval.title}*`,
+      `*Agent:* ${approval.agentName}`,
+      `*Priority:* ${approval.priority}`,
+      `*Confidence:* ${approval.confidence}%`,
+      ``,
+      preview,
+      ``,
+      approval.reasoning ? `*Why:* ${approval.reasoning}` : "",
+      approval.impact ? `*Impact:* ${approval.impact}` : "",
+    ].filter(Boolean).join("\n");
+
+    try {
+      await bot.telegram.sendMessage(chatId, sanitizeMarkdown(message), {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: "✅ Approve", callback_data: `approve:${approval.id}` },
+              { text: "❌ Reject", callback_data: `reject:${approval.id}` },
+            ],
+            [
+              { text: "📄 View Full Content", callback_data: `view:${approval.id}` },
+            ],
+          ],
+        },
+      });
+    } catch (err) {
+      console.error("Failed to push approval to Telegram:", (err as Error).message);
+    }
+  }
+}
+
 export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) {
@@ -54,6 +101,7 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
   }
 
   const bot = new Telegraf(token);
+  botInstance = bot;
 
   bot.use((ctx, next) => {
     if (!isAllowed(ctx)) {
@@ -67,6 +115,7 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
     if (text.startsWith("/")) return;
 
     const chatId = ctx.chat?.id;
+    if (chatId) authorizedChatId = String(chatId);
     const threadId = chatId ? `telegram-${chatId}` : undefined;
     const sessionId = threadId;
 
@@ -104,6 +153,7 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
 
   bot.action(/approve:(.+)/, async (ctx) => {
     const id = ctx.match[1] as string;
+    if (ctx.chat?.id) authorizedChatId = String(ctx.chat.id);
     await ctx.answerCbQuery("Approving...");
     await handleApproval(ctx as any, id, "APPROVED");
     await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
@@ -111,6 +161,7 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
 
   bot.action(/reject:(.+)/, async (ctx) => {
     const id = ctx.match[1] as string;
+    if (ctx.chat?.id) authorizedChatId = String(ctx.chat.id);
     await ctx.answerCbQuery("Rejecting...");
     await handleApproval(ctx as any, id, "REJECTED");
     await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
@@ -125,9 +176,10 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
       return;
     }
     const content = typeof approval.content === "string" ? approval.content : JSON.stringify(approval.content, null, 2);
-    await ctx.reply(sanitizeMarkdown(`📄 *${approval.title}*\n\n${content.slice(0, 3500)}`), {
-      parse_mode: "Markdown",
-    });
+    const chunks = splitIntoChunks(content, 3900);
+    for (const chunk of chunks) {
+      await ctx.reply(sanitizeMarkdown(chunk), { parse_mode: "Markdown" });
+    }
   });
 
   bot.catch((err, ctx) => {
@@ -167,7 +219,20 @@ async function handleApproval(
     await ctx.reply(sanitizeMarkdown(`${label} *${approval.title}*${reason ? `\nReason: ${reason}` : ""}`), {
       parse_mode: "Markdown",
     });
+
+    if (status === "APPROVED") {
+      const result = await executeApprovedAction(id);
+      await ctx.reply(sanitizeMarkdown(result.message), { parse_mode: "Markdown" });
+    }
   } catch (error) {
     await ctx.reply(`❌ Error processing approval: ${(error as Error).message}`);
   }
+}
+
+function splitIntoChunks(text: string, maxLen: number): string[] {
+  const chunks: string[] = [];
+  for (let i = 0; i < text.length; i += maxLen) {
+    chunks.push(text.slice(i, i + maxLen));
+  }
+  return chunks;
 }

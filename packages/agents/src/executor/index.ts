@@ -2,16 +2,13 @@
  * Post-Approval Executor
  *
  * When the CEO approves an action through Telegram or the API,
- * this module executes the approved action:
- * - Email outreach: marks as ready to send (placeholder)
- * - LinkedIn posts: stored for publishing (placeholder)
- * - Grant applications: marks for submission
- * - Partnership proposals: marks for sending
+ * this module executes the approved action.
  *
  * No external action occurs without prior human approval.
  */
 
 import { prisma } from "@quinn/database";
+import { createLinkedInPost, isLinkedInConfigured } from "../linkedin/index.js";
 
 export type ExecutionResult = {
   success: boolean;
@@ -41,6 +38,8 @@ export async function executeApprovedAction(approvalId: string): Promise<Executi
   switch (approval.type) {
     case "LINKEDIN_POST":
       return handleLinkedInPost(approval);
+    case "SOCIAL_MEDIA":
+      return handleLinkedInPost(approval);
     case "EMAIL":
       return handleEmail(approval);
     case "GRANT_APPLICATION":
@@ -58,26 +57,76 @@ export async function executeApprovedAction(approvalId: string): Promise<Executi
 }
 
 async function handleLinkedInPost(approval: any): Promise<ExecutionResult> {
-  await prisma.agentLog.create({
-    data: {
-      agentName: "NOVA" as any,
-      action: "linkedin_post_approved",
-      input: JSON.stringify({ approvalId: approval.id, title: approval.title }),
-      output: JSON.stringify({ status: "queued_for_publishing", note: "LinkedIn API integration pending" }),
-    },
-  });
+  const postContent = typeof approval.content === "string"
+    ? approval.content
+    : approval.content?.body ?? approval.content?.text ?? JSON.stringify(approval.content);
 
-  if (approval.contentItemId) {
-    await prisma.contentItem.update({
-      where: { id: approval.contentItemId },
-      data: { status: "APPROVED" },
+  if (!isLinkedInConfigured()) {
+    await prisma.agentLog.create({
+      data: {
+        agentName: "NOVA" as any,
+        action: "linkedin_post_queued",
+        input: JSON.stringify({ approvalId: approval.id, title: approval.title }),
+        output: JSON.stringify({ status: "queued", note: "LinkedIn API not configured, post queued for manual publish" }),
+      },
     });
+
+    if (approval.contentItemId) {
+      await prisma.contentItem.update({
+        where: { id: approval.contentItemId },
+        data: { status: "APPROVED" },
+      });
+    }
+
+    return {
+      success: true,
+      message: `"${approval.title}" approved. To enable auto-publishing, set LINKEDIN_ACCESS_TOKEN and LINKEDIN_ORGANIZATION_URN.`,
+    };
   }
 
-  return {
-    success: true,
-    message: `LinkedIn post "${approval.title}" approved and queued for publishing. Note: LinkedIn auto-publish requires API integration.`,
-  };
+  try {
+    const result = await createLinkedInPost(postContent);
+
+    await prisma.agentLog.create({
+      data: {
+        agentName: "NOVA" as any,
+        action: "linkedin_post_published",
+        input: JSON.stringify({ approvalId: approval.id, title: approval.title }),
+        output: JSON.stringify({ status: "published", linkedinId: result.id, urn: result.urn }),
+      },
+    });
+
+    if (approval.contentItemId) {
+      await prisma.contentItem.update({
+        where: { id: approval.contentItemId },
+        data: {
+          status: "PUBLISHED",
+          publishedAt: new Date(),
+          publishedUrl: `https://www.linkedin.com/feed/update/${result.urn}`,
+        },
+      });
+    }
+
+    return {
+      success: true,
+      message: `✅ LinkedIn post "${approval.title}" published successfully!`,
+    };
+  } catch (error: any) {
+    await prisma.agentLog.create({
+      data: {
+        agentName: "NOVA" as any,
+        action: "linkedin_post_failed",
+        input: JSON.stringify({ approvalId: approval.id, title: approval.title }),
+        output: JSON.stringify({ error: error.message }),
+        success: false,
+      },
+    });
+
+    return {
+      success: false,
+      message: `Failed to publish "${approval.title}": ${error.message}`,
+    };
+  }
 }
 
 async function handleEmail(approval: any): Promise<ExecutionResult> {

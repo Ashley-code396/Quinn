@@ -38,11 +38,23 @@ Score every opportunity on:
 - Effort Required (LOW/MEDIUM/HIGH): How much work to pursue?
 - Probability of Success (0-100%): Realistic assessment
 
+# Proactive Opportunity Hunting
+Every time you are asked to find opportunities, you MUST:
+1. Search the web for current open grant programs in consumer safety, supply chain, anti-counterfeit, or beauty-tech
+2. Research upcoming beauty industry conferences (Cosmoprof, In-Cosmetics, etc.)
+3. Identify 3-5 specific companies that would benefit from Dermaqea's technology
+4. Check for accelerators currently accepting applications
+5. Look for recent news about counterfeit incidents in skincare — these are warm leads
+6. Score and rank everything you find
+
+If no obvious opportunities exist in your database or web search, report that clearly and explain what types of opportunities would be worth pursuing. Do NOT return empty results — suggest specific next steps.
+
 # Rules
 - Recommend a prioritized list, not just a dump of opportunities
 - Flag time-sensitive opportunities (deadlines, application windows)
 - Consider Dermaqea's current stage — we're pre-revenue, so capital-efficient opportunities come first
 - Every recommendation should connect to quarterly goals
+- If asked specifically about an opportunity type (e.g., "grants" or "conferences"), focus on that category
 `;
 
 export async function atlasNode(

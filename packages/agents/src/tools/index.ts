@@ -13,3 +13,5 @@ export {
 } from "./database.js";
 
 export { searchWebTool, extractWebContentTool } from "./web-search.js";
+
+export { getLinkedInAnalyticsTool } from "./linkedin.js";

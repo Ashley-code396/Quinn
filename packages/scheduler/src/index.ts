@@ -13,6 +13,9 @@ import {
   runWeeklyPriorities,
   runQuarterlyPlanning,
   chatWithQuinn,
+  isLinkedInConfigured,
+  getLinkedInPageAnalytics,
+  pushApprovalsToTelegram,
 } from "@quinn/agents";
 import type { QuinnGraph } from "@quinn/agents";
 import { getRedis } from "@quinn/shared";
@@ -54,6 +57,20 @@ export async function createScheduler() {
     { name: "content-generation", data: { workflow: "content-generation" } },
   );
 
+  // LinkedIn post — every day at 10:00 AM (publish daily social content)
+  await queue.upsertJobScheduler(
+    "linkedin-daily-post",
+    { pattern: "0 10 * * *" },
+    { name: "linkedin-daily-post", data: { workflow: "linkedin-daily-post" } },
+  );
+
+  // LinkedIn monitoring — every day at 6:00 PM (check engagement)
+  await queue.upsertJobScheduler(
+    "linkedin-monitor",
+    { pattern: "0 18 * * *" },
+    { name: "linkedin-monitor", data: { workflow: "linkedin-monitor" } },
+  );
+
   // Follow-up check — hourly during business hours (9 AM - 6 PM)
   await queue.upsertJobScheduler(
     "follow-up-check",
@@ -83,14 +100,16 @@ export async function createScheduler() {
   );
 
   console.log("📅 Quinn scheduler initialized with cron jobs:");
-  console.log("   • Research sweep:     0 6 * * *");
-  console.log("   • Analytics snapshot: 0 7 * * *");
-  console.log("   • Content generation: 30 7 * * *");
-  console.log("   • Daily briefing:     0 8 * * *");
-  console.log("   • Follow-up check:    0 9-18 * * * (hourly)");
-  console.log("   • Weekly priorities:  0 9 * * 1");
-  console.log("   • Weekly report:      0 17 * * 5");
-  console.log("   • Quarterly planning: 0 9 1 1,4,7,10 *");
+  console.log("   • Research sweep:        0 6 * * *");
+  console.log("   • Analytics snapshot:    0 7 * * *");
+  console.log("   • Content generation:    30 7 * * *");
+  console.log("   • Daily briefing:        0 8 * * *");
+  console.log("   • LinkedIn daily post:   0 10 * * *");
+  console.log("   • LinkedIn monitor:      0 18 * * *");
+  console.log("   • Follow-up check:       0 9-18 * * * (hourly)");
+  console.log("   • Weekly priorities:     0 9 * * 1");
+  console.log("   • Weekly report:         0 17 * * 5");
+  console.log("   • Quarterly planning:    0 9 1 1,4,7,10 *");
 
   return { queue };
 }
@@ -124,8 +143,30 @@ export async function createWorker() {
             await chatWithQuinn(graph, "Run the analytics snapshot. Ask Beacon to review all KPIs, check quarterly goal progress, and flag any anomalies or metrics behind target.");
             break;
           case "content-generation":
-            await chatWithQuinn(graph, "Run morning content generation. Ask Nova to review the content calendar, generate any content due soon, and create draft LinkedIn posts for this week.");
+            await chatWithQuinn(graph, "Run morning content generation. Ask Nova to review the content calendar, generate a LinkedIn post for today, generate any content due soon, and create draft content for the rest of this week. Submit all content for approval.");
+            await pushApprovalsToTelegram();
             break;
+          case "linkedin-daily-post": {
+            if (isLinkedInConfigured()) {
+              await chatWithQuinn(graph, "Daily LinkedIn content generation. Ask Nova to review the content calendar, check get_linkedin_analytics for recent post performance, and generate a LinkedIn post for today about Dermaqea's mission, a counterfeit awareness tip, or an industry insight. Create the content item and submit it for approval via create_approval — never publish directly.");
+              await pushApprovalsToTelegram();
+            } else {
+              console.log("  ⏭️ LinkedIn not configured — skipping daily post");
+            }
+            break;
+          }
+          case "linkedin-monitor": {
+            if (isLinkedInConfigured()) {
+              const analytics = await getLinkedInPageAnalytics();
+              console.log(`  📊 LinkedIn analytics — followers: ${analytics.followers}, engagement: ${analytics.engagement}, impressions: ${analytics.impressions}`);
+              if (analytics.engagement > 0) {
+                await chatWithQuinn(graph, `LinkedIn daily performance check. Today's analytics: ${JSON.stringify(analytics)}. Ask Beacon to log this as an analytics snapshot. If engagement is low, suggest content strategy adjustments.`);
+              }
+            } else {
+              console.log("  ⏭️ LinkedIn not configured — skipping monitoring");
+            }
+            break;
+          }
           case "follow-up-check":
             await chatWithQuinn(graph, "Run a follow-up check. Ask Iris to review all relationships for overdue follow-ups, expiring opportunities, and CRM items needing attention today.");
             break;
