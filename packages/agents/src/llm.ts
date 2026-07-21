@@ -92,47 +92,42 @@ export async function withFallback<T>(
   fn: (model: Model) => Promise<T>,
   config?: ModelConfig,
 ): Promise<T> {
-  const model = createModel(config);
-  try {
-    const result = await fn(model);
-    if (currentProvider === "groq") groqErrors = 0;
-    else geminiErrors = 0;
-    return result;
-  } catch (error) {
-    if (isQuotaError(error)) {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      const model = createModel(config);
+      const result = await fn(model);
+      groqErrors = 0;
+      geminiErrors = 0;
+      return result;
+    } catch (error) {
+      if (!isQuotaError(error)) throw error;
+
       const msg = (error as any)?.message ?? (error as any)?.error?.message ?? "Unknown error";
       const retryAfter = extractRetryAfter(error);
 
       if (currentProvider === "groq") {
         groqErrors++;
-        console.warn(`  ⚠️ Groq rate limited — retry in ${(retryAfter / 1000).toFixed(1)}s (${groqErrors}/${SWAP_THRESHOLD})`);
-
+        console.warn(`  ⚠️ Groq rate limited (${groqErrors}/${SWAP_THRESHOLD}) — retry in ${(retryAfter / 1000).toFixed(1)}s`);
         if (groqErrors >= SWAP_THRESHOLD && isGeminiConfigured()) {
           currentProvider = "gemini";
           groqErrors = 0;
           console.warn("  🔄 Switching to Gemini");
-          const geminiModel = createModel(config);
-          return await fn(geminiModel);
+          continue;
         }
       } else {
         geminiErrors++;
-        console.warn(`  ⚠️ Gemini rate limited — retry in ${(retryAfter / 1000).toFixed(1)}s (${geminiErrors}/${SWAP_THRESHOLD})`);
-
-        if (geminiErrors >= SWAP_THRESHOLD && currentProvider === "gemini") {
+        console.warn(`  ⚠️ Gemini rate limited (${geminiErrors}/${SWAP_THRESHOLD}) — retry in ${(retryAfter / 1000).toFixed(1)}s`);
+        if (geminiErrors >= SWAP_THRESHOLD) {
           currentProvider = "groq";
           geminiErrors = 0;
           console.warn("  🔄 Switching back to Groq");
-          const groqModel = createModel(config);
-          return await fn(groqModel);
+          continue;
         }
       }
 
-      // Wait and retry same provider
       console.warn(`  ⏳ Waiting ${(retryAfter / 1000).toFixed(1)}s before retry...`);
       await new Promise((r) => setTimeout(r, retryAfter));
-      const retryModel = createModel(config);
-      return await fn(retryModel);
     }
-    throw error;
   }
+  throw new Error("All providers exhausted — try again later.");
 }
