@@ -93,6 +93,8 @@ export async function quinnNode(
   const iterationCount = isNewUserMessage ? 0 : state.iterationCount;
   const consultedAgents = isNewUserMessage ? [] : state.consultedAgents;
 
+
+
   // Safety: prevent infinite delegation loops
   if (iterationCount >= MAX_ITERATIONS) {
     return {
