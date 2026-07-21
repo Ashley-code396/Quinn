@@ -25,7 +25,7 @@ import cors from "cors";
 import { createServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { prisma } from "@quinn/database";
-import { buildQuinnGraph, chatWithQuinn, createTelegramBot } from "@quinn/agents";
+import { buildQuinnGraph, chatWithQuinn, createTelegramBot, pushApprovalsToTelegram } from "@quinn/agents";
 import type { QuinnGraph } from "@quinn/agents";
 import { createScheduler, createWorker, triggerWorkflow } from "@quinn/scheduler";
 import type { Queue } from "bullmq";
@@ -286,6 +286,7 @@ app.post("/api/quinn/trigger/:workflow", async (req, res) => {
   const jobId = await triggerWorkflow(schedulerQueue, workflow);
   cacheInvalidate("*").catch(() => {});
   broadcast("workflow:started", { workflow, jobId });
+  pushApprovalsToTelegram().catch(() => {});
   res.json({ jobId, workflow, status: "queued" });
 });
 
