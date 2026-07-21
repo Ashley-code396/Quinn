@@ -74,6 +74,20 @@ export function createModel(config: ModelConfig = {}): Model {
   });
 }
 
+function extractRetryAfter(error: unknown): number {
+  const err = error as any;
+  const msg = err?.message ?? err?.error?.message ?? "";
+  const match = msg.match(/try again in ([\d.]+)s/);
+  if (match?.[1]) return parseFloat(match[1]) * 1000 + 500;
+  const retryHeader = err?.headers?.get?.("retry-after") ?? err?.headers?.["retry-after"];
+  if (retryHeader) return parseInt(retryHeader) * 1000;
+  return 2500;
+}
+
+function isGeminiConfigured(): boolean {
+  return !!process.env.GEMINI_API_KEY;
+}
+
 export async function withFallback<T>(
   fn: (model: Model) => Promise<T>,
   config?: ModelConfig,
@@ -87,23 +101,35 @@ export async function withFallback<T>(
   } catch (error) {
     if (isQuotaError(error)) {
       const msg = (error as any)?.message ?? (error as any)?.error?.message ?? "Unknown error";
+      const retryAfter = extractRetryAfter(error);
+
       if (currentProvider === "groq") {
         groqErrors++;
-        console.warn(`  ⚠️ Groq quota error (${groqErrors}/${SWAP_THRESHOLD}): ${msg.slice(0, 80)}`);
-        if (groqErrors >= SWAP_THRESHOLD) {
+        console.warn(`  ⚠️ Groq rate limited — retry in ${(retryAfter / 1000).toFixed(1)}s (${groqErrors}/${SWAP_THRESHOLD})`);
+
+        if (groqErrors >= SWAP_THRESHOLD && isGeminiConfigured()) {
           currentProvider = "gemini";
           groqErrors = 0;
-          console.warn("  🔄 Switching LLM provider to Gemini");
+          console.warn("  🔄 Switching to Gemini");
+          const geminiModel = createModel(config);
+          return await fn(geminiModel);
         }
       } else {
         geminiErrors++;
-        console.warn(`  ⚠️ Gemini quota error (${geminiErrors}/${SWAP_THRESHOLD}): ${msg.slice(0, 80)}`);
-        if (geminiErrors >= SWAP_THRESHOLD) {
+        console.warn(`  ⚠️ Gemini rate limited — retry in ${(retryAfter / 1000).toFixed(1)}s (${geminiErrors}/${SWAP_THRESHOLD})`);
+
+        if (geminiErrors >= SWAP_THRESHOLD && currentProvider === "gemini") {
           currentProvider = "groq";
           geminiErrors = 0;
-          console.warn("  🔄 Switching LLM provider to Groq");
+          console.warn("  🔄 Switching back to Groq");
+          const groqModel = createModel(config);
+          return await fn(groqModel);
         }
       }
+
+      // Wait and retry same provider
+      console.warn(`  ⏳ Waiting ${(retryAfter / 1000).toFixed(1)}s before retry...`);
+      await new Promise((r) => setTimeout(r, retryAfter));
       const retryModel = createModel(config);
       return await fn(retryModel);
     }

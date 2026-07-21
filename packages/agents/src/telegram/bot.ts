@@ -135,7 +135,17 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
       await ctx.reply(`✅ ${workflow} completed.`);
       await pushApprovalsToTelegram();
     } catch (err) {
-      await ctx.reply(`❌ ${workflow} failed: ${(err as Error).message}`);
+      const msg = (err as Error).message.toLowerCase();
+      if (msg.includes("429") || msg.includes("rate limit")) {
+        await ctx.reply("⏳ AI is rate limited. Waiting a moment before retrying...");
+        await new Promise((r) => setTimeout(r, 10000));
+        try {
+          await WORKFLOWS[workflow](graph);
+          await ctx.reply(`✅ ${workflow} completed (after retry).`);
+          return;
+        } catch { /* fall through */ }
+      }
+      await ctx.reply(`❌ ${workflow} failed. Try again in a minute.`);
     }
   });
 
