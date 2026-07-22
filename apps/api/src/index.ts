@@ -345,7 +345,8 @@ async function start() {
     const launchWithRetry = async (retries = 5, delay = 2_000): Promise<void> => {
       for (let i = 0; i < retries; i++) {
         try {
-          await telegramBot.launch({ dropPendingUpdates: true });
+          await telegramBot.telegram.deleteWebhook({ drop_pending_updates: true });
+          await telegramBot.launch();
           console.log("  ✅ Telegram bot started — polling Telegram API");
           return;
         } catch (err) {
