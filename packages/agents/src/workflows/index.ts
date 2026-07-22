@@ -1,34 +1,37 @@
-/**
- * Daily Briefing Workflow
- *
- * Quinn's morning routine: review goals, consult all agents, produce briefing.
- */
-
 import { HumanMessage } from "@langchain/core/messages";
 import type { QuinnGraph } from "../graph.js";
 import { getCurrentQuarter } from "@quinn/shared";
 
-export async function runDailyBriefing(graph: QuinnGraph, threadId?: string) {
+type StepCallback = (state: Record<string, unknown>) => Promise<void> | void;
+
+async function streamGraph(
+  graph: QuinnGraph,
+  input: Record<string, unknown>,
+  config: Record<string, unknown>,
+  onStep?: StepCallback,
+) {
+  let finalResult: Record<string, unknown> = {};
+  const stream = await graph.stream(input, {
+    ...config,
+    streamMode: "values",
+  });
+  for await (const state of stream) {
+    finalResult = state as Record<string, unknown>;
+    if (onStep) await onStep(finalResult);
+  }
+  return finalResult;
+}
+
+export async function runDailyBriefing(graph: QuinnGraph, threadId?: string, onStep?: StepCallback) {
   const quarter = getCurrentQuarter();
   const today = new Date().toLocaleDateString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
 
-  const config = {
-    configurable: {
-      thread_id: threadId ?? `daily-briefing-${Date.now()}`,
-    },
-  };
-
-  const result = await graph.invoke(
+  return streamGraph(graph,
     {
       trigger: "daily-briefing",
-      messages: [
-        new HumanMessage({
-          content: `Good morning Quinn. It's ${today}. 
+      messages: [new HumanMessage({ content: `Good morning Quinn. It's ${today}. 
 
 Please run your daily executive briefing for Dermaqea:
 1. Review our ${quarter} quarterly goals and assess progress
@@ -39,32 +42,18 @@ Please run your daily executive briefing for Dermaqea:
 6. Ask Beacon for the latest analytics snapshot
 7. Synthesize everything into a clear executive briefing
 
-Focus on actionable priorities. What needs my attention today?`,
-        }),
-      ],
+Focus on actionable priorities. What needs my attention today?` })],
     },
-    config,
+    { configurable: { thread_id: threadId ?? `daily-briefing-${Date.now()}` } },
+    onStep,
   );
-
-  return result;
 }
 
-/**
- * Weekly Report Workflow (Friday)
- */
-export async function runWeeklyReport(graph: QuinnGraph, threadId?: string) {
-  const config = {
-    configurable: {
-      thread_id: threadId ?? `weekly-report-${Date.now()}`,
-    },
-  };
-
-  const result = await graph.invoke(
+export async function runWeeklyReport(graph: QuinnGraph, threadId?: string, onStep?: StepCallback) {
+  return streamGraph(graph,
     {
       trigger: "weekly-report",
-      messages: [
-        new HumanMessage({
-          content: `Quinn, it's Friday. Please generate the weekly marketing report for Dermaqea.
+      messages: [new HumanMessage({ content: `Quinn, it's Friday. Please generate the weekly marketing report for Dermaqea.
 
 Include:
 - This week's achievements and milestones
@@ -77,32 +66,18 @@ Include:
 - Opportunities for next week
 - Strategic recommendations
 
-Be honest about what went well and what didn't.`,
-        }),
-      ],
+Be honest about what went well and what didn't.` })],
     },
-    config,
+    { configurable: { thread_id: threadId ?? `weekly-report-${Date.now()}` } },
+    onStep,
   );
-
-  return result;
 }
 
-/**
- * Weekly Priorities Workflow (Monday)
- */
-export async function runWeeklyPriorities(graph: QuinnGraph, threadId?: string) {
-  const config = {
-    configurable: {
-      thread_id: threadId ?? `weekly-priorities-${Date.now()}`,
-    },
-  };
-
-  const result = await graph.invoke(
+export async function runWeeklyPriorities(graph: QuinnGraph, threadId?: string, onStep?: StepCallback) {
+  return streamGraph(graph,
     {
       trigger: "weekly-priorities",
-      messages: [
-        new HumanMessage({
-          content: `Quinn, it's Monday. Please set this week's marketing priorities for Dermaqea.
+      messages: [new HumanMessage({ content: `Quinn, it's Monday. Please set this week's marketing priorities for Dermaqea.
 
 Review:
 - Quarterly OKR progress and what needs acceleration
@@ -111,33 +86,19 @@ Review:
 - Any deadlines approaching (grants, conferences, applications)
 - Follow-ups that are overdue
 
-Produce a ranked list of this week's top 5 priorities with clear owners and deadlines.`,
-        }),
-      ],
+Produce a ranked list of this week's top 5 priorities with clear owners and deadlines.` })],
     },
-    config,
+    { configurable: { thread_id: threadId ?? `weekly-priorities-${Date.now()}` } },
+    onStep,
   );
-
-  return result;
 }
 
-/**
- * Quarterly Planning Workflow
- */
-export async function runQuarterlyPlanning(graph: QuinnGraph, threadId?: string) {
+export async function runQuarterlyPlanning(graph: QuinnGraph, threadId?: string, onStep?: StepCallback) {
   const quarter = getCurrentQuarter();
-  const config = {
-    configurable: {
-      thread_id: threadId ?? `quarterly-planning-${Date.now()}`,
-    },
-  };
-
-  const result = await graph.invoke(
+  return streamGraph(graph,
     {
       trigger: "quarterly-planning",
-      messages: [
-        new HumanMessage({
-          content: `Quinn, it's time for ${quarter} quarterly planning.
+      messages: [new HumanMessage({ content: `Quinn, it's time for ${quarter} quarterly planning.
 
 Please coordinate with all agents to produce a comprehensive quarterly marketing plan:
 
@@ -157,37 +118,25 @@ Include for each proposed OKR:
 - Timeline and milestones
 - Success criteria
 
-Be ambitious but realistic given our early-stage constraints.`,
-        }),
-      ],
+Be ambitious but realistic given our early-stage constraints.` })],
     },
-    config,
+    { configurable: { thread_id: threadId ?? `quarterly-planning-${Date.now()}` } },
+    onStep,
   );
-
-  return result;
 }
 
-/**
- * Ad-hoc chat with Quinn
- */
 export async function chatWithQuinn(
   graph: QuinnGraph,
   message: string,
   threadId?: string,
+  onStep?: StepCallback,
 ) {
-  const config = {
-    configurable: {
-      thread_id: threadId ?? `chat-${Date.now()}`,
-    },
-  };
-
-  const result = await graph.invoke(
+  return streamGraph(graph,
     {
       trigger: "chat",
       messages: [new HumanMessage({ content: message })],
     },
-    config,
+    { configurable: { thread_id: threadId ?? `chat-${Date.now()}` } },
+    onStep,
   );
-
-  return result;
 }

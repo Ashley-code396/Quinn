@@ -211,31 +211,60 @@ export const getContentItemsTool = tool(
   },
 );
 
+const VALID_CONTENT_TYPES = Object.values(ContentType) as string[];
+
 const contentTypeMap: Record<string, string> = {
   "linkedin post": "LINKEDIN_POST",
+  "linkedin_post": "LINKEDIN_POST",
   "linkedin": "LINKEDIN_POST",
   "blog article": "BLOG_ARTICLE",
+  "blog_article": "BLOG_ARTICLE",
   "blog": "BLOG_ARTICLE",
   "founder update": "FOUNDER_UPDATE",
+  "founder_update": "FOUNDER_UPDATE",
   "educational": "EDUCATIONAL",
   "technical explainer": "TECHNICAL_EXPLAINER",
+  "technical_explainer": "TECHNICAL_EXPLAINER",
   "whitepaper": "WHITEPAPER",
   "case study": "CASE_STUDY",
+  "case_study": "CASE_STUDY",
   "newsletter": "NEWSLETTER",
   "social media": "SOCIAL_MEDIA",
+  "social_media": "SOCIAL_MEDIA",
   "product announcement": "PRODUCT_ANNOUNCEMENT",
+  "product_announcement": "PRODUCT_ANNOUNCEMENT",
   "counterfeit awareness": "COUNTERFEIT_AWARENESS",
+  "counterfeit_awareness": "COUNTERFEIT_AWARENESS",
   "press release": "PRESS_RELEASE",
+  "press_release": "PRESS_RELEASE",
 };
+
+function normalizeContentType(raw: string | undefined): string {
+  if (!raw) return "LINKEDIN_POST";
+  const mapped = contentTypeMap[raw.toLowerCase().trim()];
+  if (mapped) return mapped;
+  const upper = raw.toUpperCase().trim();
+  if (VALID_CONTENT_TYPES.includes(upper)) return upper;
+  return "LINKEDIN_POST";
+}
+
+function toISODateTime(dateStr: string | undefined): string | undefined {
+  if (!dateStr) return undefined;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return `${dateStr}T00:00:00.000Z`;
+  }
+  return dateStr;
+}
 
 /**
  * Create a content item.
  */
 export const createContentItemTool = tool(
   async (params) => {
-    const type = contentTypeMap[params.type?.toLowerCase().trim()] ?? params.type?.toUpperCase() ?? "LINKEDIN_POST";
+    const type = normalizeContentType(params.type);
+    const targetDate = toISODateTime(params.targetDate);
     const item = await prisma.contentItem.create({
-      data: { ...params, type } as never,
+      data: { ...params, type, targetDate } as never,
     });
     return JSON.stringify(item, null, 2);
   },
@@ -248,7 +277,7 @@ export const createContentItemTool = tool(
       body: z.string().describe("Full content body"),
       summary: z.string().optional().describe("Brief summary"),
       tags: z.array(z.string()).optional(),
-      targetDate: z.string().optional().describe("Target publish date (ISO string)"),
+      targetDate: z.string().optional().describe("Target publish date (ISO string like 2026-07-22 or 2026-07-22T00:00:00.000Z)"),
     }),
   },
 );

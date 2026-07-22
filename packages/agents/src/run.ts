@@ -94,7 +94,8 @@ Examples:
 
   const duration = ((Date.now() - startTime) / 1000).toFixed(1);
 
-  const lastMessage = result.messages[result.messages.length - 1];
+  const msgs = (result as Record<string, unknown>).messages as any[];
+  const lastMessage = msgs[msgs.length - 1];
   const output = lastMessage?.content?.toString() ?? "No response";
 
   console.log(`\n${"=".repeat(72)}`);

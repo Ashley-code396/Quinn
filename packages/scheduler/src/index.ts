@@ -16,8 +16,10 @@ import {
   isLinkedInConfigured,
   getLinkedInPageAnalytics,
   pushApprovalsToTelegram,
+  pushFindingsToTelegram,
 } from "@quinn/agents";
 import type { QuinnGraph } from "@quinn/agents";
+import type { AgentReport } from "@quinn/shared";
 import { getRedis } from "@quinn/shared";
 
 const QUEUE_NAME = "quinn-scheduler";
@@ -131,24 +133,35 @@ export async function createWorker() {
 
       const startTime = Date.now();
 
+      const makeOnStep = () => {
+        let seenReportCount = 0;
+        return async (state: Record<string, unknown>) => {
+          const reports = (state.agentReports as AgentReport[] | undefined) ?? [];
+          if (reports.length > seenReportCount) {
+            await pushFindingsToTelegram(state, seenReportCount);
+            seenReportCount = reports.length;
+          }
+        };
+      };
+
       try {
         switch (job.data.workflow) {
           case "daily-briefing":
-            await runDailyBriefing(graph);
+            await runDailyBriefing(graph, undefined, makeOnStep());
             break;
           case "research-sweep":
-            await chatWithQuinn(graph, "Run a morning research sweep. Ask Sage to search for new industry developments, competitor news, and emerging opportunities. Store any findings.");
+            await chatWithQuinn(graph, "Run a morning research sweep. Ask Sage to search for new industry developments, competitor news, and emerging opportunities. Store any findings.", undefined, makeOnStep());
             break;
           case "analytics-snapshot":
-            await chatWithQuinn(graph, "Run the analytics snapshot. Ask Beacon to review all KPIs, check quarterly goal progress, and flag any anomalies or metrics behind target.");
+            await chatWithQuinn(graph, "Run the analytics snapshot. Ask Beacon to review all KPIs, check quarterly goal progress, and flag any anomalies or metrics behind target.", undefined, makeOnStep());
             break;
           case "content-generation":
-            await chatWithQuinn(graph, "Run morning content generation. Ask Nova to review the content calendar, generate a LinkedIn post for today, generate any content due soon, and create draft content for the rest of this week. Submit all content for approval.");
+            await chatWithQuinn(graph, "Run morning content generation. Ask Nova to review the content calendar, generate a LinkedIn post for today, generate any content due soon, and create draft content for the rest of this week. Submit all content for approval.", undefined, makeOnStep());
             await pushApprovalsToTelegram();
             break;
           case "linkedin-daily-post": {
             if (isLinkedInConfigured()) {
-              await chatWithQuinn(graph, "Daily LinkedIn content generation. Ask Nova to review the content calendar, check get_linkedin_analytics for recent post performance, and generate a LinkedIn post for today about Dermaqea's mission, a counterfeit awareness tip, or an industry insight. Create the content item and submit it for approval via create_approval — never publish directly.");
+              await chatWithQuinn(graph, "Daily LinkedIn content generation. Ask Nova to review the content calendar, check get_linkedin_analytics for recent post performance, and generate a LinkedIn post for today about Dermaqea's mission, a counterfeit awareness tip, or an industry insight. Create the content item and submit it for approval via create_approval — never publish directly.", undefined, makeOnStep());
               await pushApprovalsToTelegram();
             } else {
               console.log("  ⏭️ LinkedIn not configured — skipping daily post");
@@ -160,7 +173,7 @@ export async function createWorker() {
               const analytics = await getLinkedInPageAnalytics();
               console.log(`  📊 LinkedIn analytics — followers: ${analytics.followers}, engagement: ${analytics.engagement}, impressions: ${analytics.impressions}`);
               if (analytics.engagement > 0) {
-                await chatWithQuinn(graph, `LinkedIn daily performance check. Today's analytics: ${JSON.stringify(analytics)}. Ask Beacon to log this as an analytics snapshot. If engagement is low, suggest content strategy adjustments.`);
+                await chatWithQuinn(graph, `LinkedIn daily performance check. Today's analytics: ${JSON.stringify(analytics)}. Ask Beacon to log this as an analytics snapshot. If engagement is low, suggest content strategy adjustments.`, undefined, makeOnStep());
               }
             } else {
               console.log("  ⏭️ LinkedIn not configured — skipping monitoring");
@@ -168,16 +181,16 @@ export async function createWorker() {
             break;
           }
           case "follow-up-check":
-            await chatWithQuinn(graph, "Run a follow-up check. Ask Iris to review all relationships for overdue follow-ups, expiring opportunities, and CRM items needing attention today.");
+            await chatWithQuinn(graph, "Run a follow-up check. Ask Iris to review all relationships for overdue follow-ups, expiring opportunities, and CRM items needing attention today.", undefined, makeOnStep());
             break;
           case "weekly-report":
-            await runWeeklyReport(graph);
+            await runWeeklyReport(graph, undefined, makeOnStep());
             break;
           case "weekly-priorities":
-            await runWeeklyPriorities(graph);
+            await runWeeklyPriorities(graph, undefined, makeOnStep());
             break;
           case "quarterly-planning":
-            await runQuarterlyPlanning(graph);
+            await runQuarterlyPlanning(graph, undefined, makeOnStep());
             break;
           default:
             console.warn(`Unknown workflow: ${job.data.workflow}`);

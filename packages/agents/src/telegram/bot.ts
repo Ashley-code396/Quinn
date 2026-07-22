@@ -1,13 +1,28 @@
 import { Telegraf, Markup } from "telegraf";
 import type { Context } from "telegraf";
+import { BaseMessage } from "@langchain/core/messages";
 import { prisma } from "@quinn/database";
 import type { QuinnGraph } from "../graph.js";
+import type { AgentReport, Recommendation, Alert } from "@quinn/shared";
 import { chatWithQuinn, runDailyBriefing, runWeeklyReport, runWeeklyPriorities, runQuarterlyPlanning } from "../workflows/index.js";
 import { isRedisMemoryConfigured, storeSessionEvent } from "../memory/index.js";
 import { executeApprovedAction } from "../executor/index.js";
 
 let botInstance: Telegraf | null = null;
 let authorizedChatId: string | null = null;
+
+function getAgentEmoji(name: string): string {
+  const map: Record<string, string> = {
+    sage: "🔬",
+    nova: "✍️",
+    atlas: "🚀",
+    iris: "🤝",
+    helix: "🎨",
+    beacon: "📊",
+    quinn: "🧠",
+  };
+  return map[name.toLowerCase()] ?? "📋";
+}
 
 function sanitizeMarkdown(text: string): string {
   let result = text;
@@ -93,6 +108,64 @@ export async function pushApprovalsToTelegram(): Promise<void> {
   }
 }
 
+/**
+ * Push agent findings and final briefing to Telegram after a workflow run.
+ * Pass `seenReportCount` to only push reports beyond that index (for incremental streaming).
+ */
+export async function pushFindingsToTelegram(
+  result: Record<string, unknown>,
+  seenReportCount = 0,
+): Promise<void> {
+  const bot = botInstance;
+  const chatId = authorizedChatId ?? process.env.TELEGRAM_CHAT_ID ?? null;
+  if (!bot || !chatId) return;
+
+  const agentReports = (result.agentReports as AgentReport[] | undefined) ?? [];
+  const messages = result.messages as BaseMessage[] | undefined;
+  const workflowTrigger = result.trigger as string | undefined;
+
+  const newReports = agentReports.slice(seenReportCount);
+
+  if (newReports.length === 0 && (!messages || messages.length === 0)) return;
+
+  if (seenReportCount === 0 && newReports.length > 0) {
+    const workflowLabel = workflowTrigger
+      ? workflowTrigger.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+      : "Agent Report";
+    try {
+      await bot.telegram.sendMessage(chatId, `📋 *${workflowLabel}*`, { parse_mode: "Markdown" });
+    } catch { /* ignore header errors */ }
+  }
+
+  for (const report of newReports) {
+    const emoji = getAgentEmoji(report.agentName);
+    const findingsText = report.findings.slice(0, 6).map((f, i) => `${i + 1}. ${f}`).join("\n");
+    const msg = [
+      `${emoji} *${report.agentName.toUpperCase()}*`,
+      report.summary ? `_${report.summary}_` : "",
+      findingsText ? `\n${findingsText}` : "",
+    ].filter(Boolean).join("\n");
+
+    try {
+      await bot.telegram.sendMessage(chatId, sanitizeMarkdown(msg.slice(0, 4000)), { parse_mode: "Markdown" });
+    } catch (err) {
+      console.error("Failed to push agent finding to Telegram:", (err as Error).message);
+    }
+  }
+
+  if (!newReports.length) {
+    const finalMessage = messages?.[messages.length - 1];
+    const briefing = finalMessage?.content?.toString() ?? "";
+    if (briefing && briefing.length > 20) {
+      try {
+        await bot.telegram.sendMessage(chatId, sanitizeMarkdown(briefing.slice(0, 4000)), { parse_mode: "Markdown" });
+      } catch (err) {
+        console.error("Failed to push briefing to Telegram:", (err as Error).message);
+      }
+    }
+  }
+}
+
 export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) {
@@ -131,7 +204,20 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
     }
     await ctx.reply(`⏳ Running ${workflow}...`);
     try {
-      await WORKFLOWS[workflow](graph);
+      let seenReportCount = 0;
+      const onStep = async (state: Record<string, unknown>) => {
+        const reports = (state.agentReports as AgentReport[] | undefined) ?? [];
+        if (reports.length > seenReportCount) {
+          await pushFindingsToTelegram(state, seenReportCount);
+          seenReportCount = reports.length;
+        }
+        const messages = state.messages as BaseMessage[] | undefined;
+        const last = messages?.[messages.length - 1];
+        if (last?.name === "quinn" && last?.content?.toString().length > 20) {
+          await pushFindingsToTelegram(state, seenReportCount);
+        }
+      };
+      await runWorkflow(workflow, onStep);
       await ctx.reply(`✅ ${workflow} completed.`);
       await pushApprovalsToTelegram();
     } catch (err) {
@@ -140,7 +226,14 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
         await ctx.reply("⏳ AI is rate limited. Waiting a moment before retrying...");
         await new Promise((r) => setTimeout(r, 10000));
         try {
-          await WORKFLOWS[workflow](graph);
+          let seenReportCount = 0;
+          await runWorkflow(workflow, async (state) => {
+            const reports = (state.agentReports as AgentReport[] | undefined) ?? [];
+            if (reports.length > seenReportCount) {
+              await pushFindingsToTelegram(state, seenReportCount);
+              seenReportCount = reports.length;
+            }
+          });
           await ctx.reply(`✅ ${workflow} completed (after retry).`);
           return;
         } catch { /* fall through */ }
@@ -148,6 +241,35 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
       await ctx.reply(`❌ ${workflow} failed. Try again in a minute.`);
     }
   });
+
+  async function runWorkflow(name: string, onStep: (state: Record<string, unknown>) => Promise<void>) {
+    switch (name) {
+      case "research-sweep":
+        await chatWithQuinn(graph, "Run a research sweep. Ask Sage to search for new industry developments, competitor news, and emerging opportunities.", undefined, onStep);
+        break;
+      case "analytics-snapshot":
+        await chatWithQuinn(graph, "Run the analytics snapshot. Ask Beacon to review all KPIs, check quarterly goal progress, and flag any anomalies or metrics behind target.", undefined, onStep);
+        break;
+      case "content-generation":
+        await chatWithQuinn(graph, "Run morning content generation. Ask Nova to review the content calendar, generate a LinkedIn post for today, generate any content due soon, and create draft content for the rest of this week. Submit all content for approval.", undefined, onStep);
+        break;
+      case "daily-briefing":
+        await runDailyBriefing(graph, undefined, onStep);
+        break;
+      case "follow-up-check":
+        await chatWithQuinn(graph, "Run a follow-up check. Ask Iris to review all relationships for overdue follow-ups, expiring opportunities, and CRM items needing attention today.", undefined, onStep);
+        break;
+      case "weekly-priorities":
+        await runWeeklyPriorities(graph, undefined, onStep);
+        break;
+      case "weekly-report":
+        await runWeeklyReport(graph, undefined, onStep);
+        break;
+      case "quarterly-planning":
+        await runQuarterlyPlanning(graph, undefined, onStep);
+        break;
+    }
+  }
 
   bot.command("start", async (ctx) => {
     await ctx.reply(
@@ -177,8 +299,16 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
     await ctx.sendChatAction("typing");
 
     try {
-      const result = await chatWithQuinn(graph, text, threadId);
-      const lastMessage = result.messages[result.messages.length - 1];
+      let seenReportCount = 0;
+      const result = await chatWithQuinn(graph, text, threadId, async (state) => {
+        const reports = (state.agentReports as AgentReport[] | undefined) ?? [];
+        if (reports.length > seenReportCount) {
+          await pushFindingsToTelegram(state, seenReportCount);
+          seenReportCount = reports.length;
+        }
+      });
+      const msgs = (result.messages as BaseMessage[]) ?? [];
+      const lastMessage = msgs[msgs.length - 1];
       const answer = lastMessage?.content?.toString() ?? "";
       if (answer) {
         if (sessionId && isRedisMemoryConfigured()) {

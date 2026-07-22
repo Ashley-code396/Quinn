@@ -1,1 +1,1 @@
-export { createTelegramBot, pushApprovalsToTelegram } from "./bot.js";
+export { createTelegramBot, pushApprovalsToTelegram, pushFindingsToTelegram } from "./bot.js";

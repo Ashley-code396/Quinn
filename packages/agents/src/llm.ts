@@ -1,5 +1,6 @@
 import { ChatGroq } from "@langchain/groq";
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { ChatGoogle } from "@langchain/google/node";
+import { ChatOpenRouter } from "@langchain/openrouter";
 
 type Invokable = {
   invoke(messages: any[]): Promise<any>;
@@ -15,11 +16,12 @@ export type ModelConfig = {
   temperature?: number;
 };
 
-export type LLMProvider = "groq" | "gemini";
+export type LLMProvider = "groq" | "gemini" | "openrouter";
 
 let currentProvider: LLMProvider = "groq";
 let groqErrors = 0;
 let geminiErrors = 0;
+let openrouterErrors = 0;
 const SWAP_THRESHOLD = 2;
 
 export function getCurrentProvider(): LLMProvider {
@@ -54,7 +56,12 @@ function getGroqModel(desired?: string): string {
 
 function getGeminiModel(desired?: string): string {
   if (desired && desired !== "llama-3.3-70b-versatile") return desired;
-  return "gemini-2.0-flash";
+  return "gemini-3.5-flash";
+}
+
+function getOpenRouterModel(desired?: string): string {
+  if (desired && desired !== "llama-3.3-70b-versatile" && !desired.startsWith("gemini-")) return desired;
+  return "nvidia/nemotron-3-super:free";
 }
 
 export function createModel(config: ModelConfig = {}): Model {
@@ -67,10 +74,18 @@ export function createModel(config: ModelConfig = {}): Model {
     });
   }
 
-  return new ChatGoogleGenerativeAI({
-    model: getGeminiModel(config.model),
+  if (currentProvider === "gemini") {
+    return new ChatGoogle({
+      model: getGeminiModel(config.model),
+      temperature,
+      apiKey: process.env["GEMINI_API_KEY"],
+    });
+  }
+
+  return new ChatOpenRouter({
+    model: getOpenRouterModel(config.model),
     temperature,
-    apiKey: process.env["GEMINI_API_KEY"],
+    apiKey: process.env["OPENROUTER_API_KEY"],
   });
 }
 
@@ -88,6 +103,10 @@ function isGeminiConfigured(): boolean {
   return !!process.env.GEMINI_API_KEY;
 }
 
+function isOpenRouterConfigured(): boolean {
+  return !!process.env.OPENROUTER_API_KEY;
+}
+
 export async function withFallback<T>(
   fn: (model: Model) => Promise<T>,
   config?: ModelConfig,
@@ -98,6 +117,7 @@ export async function withFallback<T>(
       const result = await fn(model);
       groqErrors = 0;
       geminiErrors = 0;
+      openrouterErrors = 0;
       return result;
     } catch (error) {
       if (!isQuotaError(error)) throw error;
@@ -114,12 +134,21 @@ export async function withFallback<T>(
           console.warn("  🔄 Switching to Gemini");
           continue;
         }
-      } else {
+      } else if (currentProvider === "gemini") {
         geminiErrors++;
         console.warn(`  ⚠️ Gemini rate limited (${geminiErrors}/${SWAP_THRESHOLD}) — retry in ${(retryAfter / 1000).toFixed(1)}s`);
-        if (geminiErrors >= SWAP_THRESHOLD) {
-          currentProvider = "groq";
+        if (geminiErrors >= SWAP_THRESHOLD && isOpenRouterConfigured()) {
+          currentProvider = "openrouter";
           geminiErrors = 0;
+          console.warn("  🔄 Switching to OpenRouter (free)");
+          continue;
+        }
+      } else {
+        openrouterErrors++;
+        console.warn(`  ⚠️ OpenRouter rate limited (${openrouterErrors}/${SWAP_THRESHOLD}) — retry in ${(retryAfter / 1000).toFixed(1)}s`);
+        if (openrouterErrors >= SWAP_THRESHOLD) {
+          currentProvider = "groq";
+          openrouterErrors = 0;
           console.warn("  🔄 Switching back to Groq");
           continue;
         }
