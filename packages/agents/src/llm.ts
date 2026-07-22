@@ -61,7 +61,7 @@ function getGeminiModel(desired?: string): string {
 
 function getOpenRouterModel(desired?: string): string {
   if (desired && desired !== "llama-3.3-70b-versatile" && !desired.startsWith("gemini-")) return desired;
-  return "nvidia/nemotron-3-super:free";
+  return "nvidia/nemotron-3-super-120b-a12b:free";
 }
 
 export function createModel(config: ModelConfig = {}): Model {
