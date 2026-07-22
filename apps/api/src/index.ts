@@ -264,7 +264,8 @@ app.post("/api/quinn/chat", async (req, res) => {
 
   try {
     const result = await chatWithQuinn(graph, message, threadId);
-    const lastMessage = result.messages[result.messages.length - 1];
+    const msgs = (result as Record<string, unknown>).messages as any[];
+    const lastMessage = msgs[msgs.length - 1];
     broadcast("agent:status", { agent: "quinn", status: "completed" });
     res.json({
       response: lastMessage?.content?.toString() ?? "No response",
