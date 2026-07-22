@@ -263,8 +263,9 @@ export const createContentItemTool = tool(
   async (params) => {
     const type = normalizeContentType(params.type);
     const targetDate = toISODateTime(params.targetDate);
+    const { confidence, ...clean } = params;
     const item = await prisma.contentItem.create({
-      data: { ...params, type, targetDate } as never,
+      data: { ...clean, type, targetDate } as never,
     });
     return JSON.stringify(item, null, 2);
   },
@@ -278,7 +279,8 @@ export const createContentItemTool = tool(
       summary: z.string().optional().describe("Brief summary"),
       tags: z.array(z.string()).optional(),
       targetDate: z.string().optional().describe("Target publish date (ISO string like 2026-07-22 or 2026-07-22T00:00:00.000Z)"),
-    }),
+      confidence: z.union([z.number(), z.string()]).optional(),
+    }).strip(),
   },
 );
 
