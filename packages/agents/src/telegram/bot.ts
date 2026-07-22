@@ -118,7 +118,11 @@ export async function pushFindingsToTelegram(
 ): Promise<void> {
   const bot = botInstance;
   const chatId = authorizedChatId ?? process.env.TELEGRAM_CHAT_ID ?? null;
-  if (!bot || !chatId) return;
+  if (!bot) return;
+  if (!chatId) {
+    console.warn("  ⚠️ pushFindingsToTelegram: no chatId. Set TELEGRAM_CHAT_ID or message the bot first.");
+    return;
+  }
 
   const agentReports = (result.agentReports as AgentReport[] | undefined) ?? [];
   const messages = result.messages as BaseMessage[] | undefined;
@@ -204,21 +208,9 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
     }
     await ctx.reply(`⏳ Running ${workflow}...`);
     try {
-      let seenReportCount = 0;
-      const onStep = async (state: Record<string, unknown>) => {
-        const reports = (state.agentReports as AgentReport[] | undefined) ?? [];
-        if (reports.length > seenReportCount) {
-          await pushFindingsToTelegram(state, seenReportCount);
-          seenReportCount = reports.length;
-        }
-        const messages = state.messages as BaseMessage[] | undefined;
-        const last = messages?.[messages.length - 1];
-        if (last?.name === "quinn" && last?.content?.toString().length > 20) {
-          await pushFindingsToTelegram(state, seenReportCount);
-        }
-      };
-      await runWorkflow(workflow, onStep);
+      const result = await runWorkflow(workflow);
       await ctx.reply(`✅ ${workflow} completed.`);
+      if (result) await pushFindingsToTelegram(result);
       await pushApprovalsToTelegram();
     } catch (err) {
       const msg = (err as Error).message.toLowerCase();
@@ -226,15 +218,9 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
         await ctx.reply("⏳ AI is rate limited. Waiting a moment before retrying...");
         await new Promise((r) => setTimeout(r, 10000));
         try {
-          let seenReportCount = 0;
-          await runWorkflow(workflow, async (state) => {
-            const reports = (state.agentReports as AgentReport[] | undefined) ?? [];
-            if (reports.length > seenReportCount) {
-              await pushFindingsToTelegram(state, seenReportCount);
-              seenReportCount = reports.length;
-            }
-          });
+          const result = await runWorkflow(workflow);
           await ctx.reply(`✅ ${workflow} completed (after retry).`);
+          if (result) await pushFindingsToTelegram(result);
           return;
         } catch { /* fall through */ }
       }
@@ -242,32 +228,39 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
     }
   });
 
-  async function runWorkflow(name: string, onStep: (state: Record<string, unknown>) => Promise<void>) {
+  async function runWorkflow(name: string): Promise<Record<string, unknown> | null> {
+    let seenReportCount = 0;
+    const onStep = async (state: Record<string, unknown>) => {
+      const reports = (state.agentReports as AgentReport[] | undefined) ?? [];
+      if (reports.length > seenReportCount) {
+        await pushFindingsToTelegram(state, seenReportCount);
+        seenReportCount = reports.length;
+      }
+      const messages = state.messages as BaseMessage[] | undefined;
+      const last = messages?.[messages.length - 1];
+      if (last?.name === "quinn" && last?.content?.toString().length > 20) {
+        await pushFindingsToTelegram(state, seenReportCount);
+      }
+    };
     switch (name) {
       case "research-sweep":
-        await chatWithQuinn(graph, "Run a research sweep. Ask Sage to search for new industry developments, competitor news, and emerging opportunities.", undefined, onStep);
-        break;
+        return await chatWithQuinn(graph, "Run a research sweep. Ask Sage to search for new industry developments, competitor news, and emerging opportunities.", undefined, onStep) as unknown as Record<string, unknown>;
       case "analytics-snapshot":
-        await chatWithQuinn(graph, "Run the analytics snapshot. Ask Beacon to review all KPIs, check quarterly goal progress, and flag any anomalies or metrics behind target.", undefined, onStep);
-        break;
+        return await chatWithQuinn(graph, "Run the analytics snapshot. Ask Beacon to review all KPIs, check quarterly goal progress, and flag any anomalies or metrics behind target.", undefined, onStep) as unknown as Record<string, unknown>;
       case "content-generation":
-        await chatWithQuinn(graph, "Run morning content generation. Ask Nova to review the content calendar, generate a LinkedIn post for today, generate any content due soon, and create draft content for the rest of this week. Submit all content for approval.", undefined, onStep);
-        break;
+        return await chatWithQuinn(graph, "Run morning content generation. Ask Nova to review the content calendar, generate a LinkedIn post for today, generate any content due soon, and create draft content for the rest of this week. Submit all content for approval.", undefined, onStep) as unknown as Record<string, unknown>;
       case "daily-briefing":
-        await runDailyBriefing(graph, undefined, onStep);
-        break;
+        return await runDailyBriefing(graph, undefined, onStep) as unknown as Record<string, unknown>;
       case "follow-up-check":
-        await chatWithQuinn(graph, "Run a follow-up check. Ask Iris to review all relationships for overdue follow-ups, expiring opportunities, and CRM items needing attention today.", undefined, onStep);
-        break;
+        return await chatWithQuinn(graph, "Run a follow-up check. Ask Iris to review all relationships for overdue follow-ups, expiring opportunities, and CRM items needing attention today.", undefined, onStep) as unknown as Record<string, unknown>;
       case "weekly-priorities":
-        await runWeeklyPriorities(graph, undefined, onStep);
-        break;
+        return await runWeeklyPriorities(graph, undefined, onStep) as unknown as Record<string, unknown>;
       case "weekly-report":
-        await runWeeklyReport(graph, undefined, onStep);
-        break;
+        return await runWeeklyReport(graph, undefined, onStep) as unknown as Record<string, unknown>;
       case "quarterly-planning":
-        await runQuarterlyPlanning(graph, undefined, onStep);
-        break;
+        return await runQuarterlyPlanning(graph, undefined, onStep) as unknown as Record<string, unknown>;
+      default:
+        return null;
     }
   }
 
