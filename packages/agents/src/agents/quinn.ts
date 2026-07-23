@@ -142,13 +142,25 @@ export async function quinnNode(
       ? `\nAgents already consulted this session: ${consultedAgents.join(", ")}`
       : "";
 
+  const freshRequestContext = isNewUserMessage
+    ? `\n# Fresh Request\nThis is a NEW message from the user — treat it independently. Do NOT continue previous agent research or re-delegate to an agent that already reported. Read the user's latest message and respond to what they are asking NOW. If they are greeting you, greet back. If they are asking for something new, delegate ONLY the relevant agent.`
+    : "";
+
   const systemPrompt = buildSystemPrompt(
     "quinn",
-    QUINN_ADDITIONAL_CONTEXT + memoryContext + agentReportContext + consultedContext,
+    QUINN_ADDITIONAL_CONTEXT + memoryContext + agentReportContext + consultedContext + freshRequestContext,
   );
 
   // Limit message history to last 10 exchanges to stay within token limits
-  const recentMessages = state.messages.slice(-10);
+  // For new user messages, strip out intermediate agent responses to avoid
+  // the LLM treating old Sage/Nova/etc. outputs as recent context.
+  const recentMessages = (isNewUserMessage
+    ? state.messages.filter((m) => {
+        const name = (m as any).name;
+        return !name || name === "quinn";
+      })
+    : state.messages
+  ).slice(-10);
 
   const messagesForModel = [
     new SystemMessage(systemPrompt),
