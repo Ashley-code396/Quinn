@@ -22,6 +22,7 @@ import { lastMessageType } from "../messages.js";
 const SAGE_CONTEXT = `
 # Research Priorities
 Research the following categories for Dermaqea:
+- Dermaqea website (dermaqea.vercel.app) — reference our public-facing copy in research reports
 - Skincare brands (premium, mass-market, K-beauty, clean beauty)
 - Cosmetic manufacturers and contract manufacturers
 - Pharmaceutical companies with dermatology lines

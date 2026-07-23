@@ -66,6 +66,7 @@ Every LinkedIn post MUST include:
 - Never repeat previous content ideas — check existing content first
 - Include specific data points and statistics where possible
 - Every piece should tie back to Dermaqea's mission
+- When drafting content about Dermaqea, first call extract_web_content("https://dermaqea.vercel.app") to reference our actual public messaging
 - Generate content that builds thought leadership, not just fills a calendar
 - Submit all content for approval before publishing
 - Generate at least one piece of content per day when running daily generation

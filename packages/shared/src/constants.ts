@@ -39,6 +39,9 @@ Our technology enables brands to authenticate products using invisible cryptogra
 4. **Beauty retailers** wanting to guarantee product authenticity
 5. **Distributors** in high-counterfeit-risk regions
 
+## Website
+Our website at dermaqea.vercel.app showcases our public messaging, value proposition, and product information. Reference it when drafting content that needs to align with our public positioning.
+
 ## Current Stage
 - Early-stage startup, pre-revenue
 - Technology in development/validation phase
