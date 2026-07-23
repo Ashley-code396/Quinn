@@ -90,8 +90,9 @@ export async function quinnNode(
   const isNewUserMessage = lastMsg?._getType() === "human";
   const iterationCount = isNewUserMessage ? 0 : state.iterationCount;
   const consultedAgents = isNewUserMessage ? [] : state.consultedAgents;
-
-
+  const agentReports = isNewUserMessage ? [] : state.agentReports;
+  const recommendations = isNewUserMessage ? [] : state.recommendations;
+  const alerts = isNewUserMessage ? [] : state.alerts;
 
   // Safety: prevent infinite delegation loops
   if (iterationCount >= MAX_ITERATIONS) {
@@ -132,8 +133,8 @@ export async function quinnNode(
     : "";
 
   const agentReportContext =
-    state.agentReports.length > 0
-      ? `\n# Agent Reports Received\n${state.agentReports.map((r) => `## ${r.agentName}\n${r.summary}\nFindings: ${r.findings.join(", ")}`).join("\n\n")}`
+    agentReports.length > 0
+      ? `\n# Agent Reports Received\n${agentReports.map((r) => `## ${r.agentName}\n${r.summary}\nFindings: ${r.findings.join(", ")}`).join("\n\n")}`
       : "";
 
   const consultedContext =
@@ -175,5 +176,6 @@ export async function quinnNode(
     ],
     iterationCount: iterationCount + 1,
     consultedAgents: [...consultedAgents, result.nextAgent as never],
+    ...(isNewUserMessage ? { agentReports, recommendations, alerts } : {}),
   };
 }

@@ -43,7 +43,7 @@ export const searchOrganizationsTool = tool(
       query: z.string().optional().describe("Search query for name, industry, or notes"),
       industry: z.string().optional().describe("Filter by industry"),
       status: z.string().optional().describe("Filter by outreach status"),
-      limit: z.union([z.number(), z.string()]).optional().describe("Max results to return (default 10)"),
+      limit: z.number().optional().describe("Max results to return (default 10)"),
     }),
   },
 );
@@ -98,7 +98,7 @@ export const upsertOrganizationTool = tool(
       recentNews: z.string().optional(),
       dermaqeaRelevance: z.string().optional(),
       partnershipPotential: z.string().optional(),
-      priorityScore: z.union([z.number(), z.string()]).optional(),
+      priorityScore: z.number().optional(),
       researchNotes: z.string().optional(),
       tags: z.array(z.string()).optional(),
     }),
@@ -121,7 +121,7 @@ export const getPendingApprovalsTool = tool(
     name: "get_pending_approvals",
     description: "Get all pending approval requests that need human review.",
     schema: z.object({
-      limit: z.union([z.number(), z.string()]).optional().describe("Max results (default 20)"),
+      limit: z.number().optional().describe("Max results (default 20)"),
     }),
   },
 );
@@ -158,7 +158,7 @@ export const createApprovalTool = tool(
       reasoning: z.string().describe("Why Quinn recommends this"),
       impact: z.string().describe("Expected business impact"),
       effort: z.string().describe("LOW, MEDIUM, or HIGH"),
-      confidence: z.union([z.number(), z.string()]).describe("Confidence score 0-100"),
+      confidence: z.number().describe("Confidence score 0-100"),
       metrics: z.array(z.string()).describe("Success measurement criteria"),
     }),
   },
@@ -206,7 +206,7 @@ export const getContentItemsTool = tool(
     schema: z.object({
       type: z.string().optional().describe("Content type filter"),
       status: z.string().optional().describe("Content status filter"),
-      limit: z.union([z.number(), z.string()]).optional().describe("Max results"),
+      limit: z.number().optional().describe("Max results"),
     }),
   },
 );
@@ -279,7 +279,7 @@ export const createContentItemTool = tool(
       summary: z.string().optional().describe("Brief summary"),
       tags: z.array(z.string()).optional(),
       targetDate: z.string().optional().describe("Target publish date (ISO string like 2026-07-22 or 2026-07-22T00:00:00.000Z)"),
-      confidence: z.union([z.number(), z.string()]).optional(),
+      confidence: z.number().optional(),
     }).strip(),
   },
 );
@@ -308,7 +308,7 @@ export const getFollowUpsDueTool = tool(
     name: "get_followups_due",
     description: "Get relationships with follow-ups due within the specified number of days.",
     schema: z.object({
-      daysAhead: z.union([z.number(), z.string()]).optional().describe("Days ahead to check (default 7)"),
+      daysAhead: z.number().optional().describe("Days ahead to check (default 7)"),
     }),
   },
 );
@@ -390,7 +390,7 @@ export const getOpportunitiesTool = tool(
     schema: z.object({
       type: z.string().optional(),
       status: z.string().optional(),
-      limit: z.union([z.number(), z.string()]).optional(),
+      limit: z.number().optional(),
     }),
   },
 );
@@ -462,7 +462,7 @@ export const getAnalyticsSnapshotsTool = tool(
     description: "Get analytics snapshots for tracking performance over time.",
     schema: z.object({
       period: z.string().optional().describe("'daily', 'weekly', or 'monthly'"),
-      limit: z.union([z.number(), z.string()]).optional(),
+      limit: z.number().optional(),
     }),
   },
 );
