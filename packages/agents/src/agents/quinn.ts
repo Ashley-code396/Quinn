@@ -152,15 +152,7 @@ export async function quinnNode(
   );
 
   // Limit message history to last 10 exchanges to stay within token limits
-  // For new user messages, strip out intermediate agent responses to avoid
-  // the LLM treating old Sage/Nova/etc. outputs as recent context.
-  const recentMessages = (isNewUserMessage
-    ? state.messages.filter((m) => {
-        const name = (m as any).name;
-        return !name || name === "quinn";
-      })
-    : state.messages
-  ).slice(-10);
+  const recentMessages = state.messages.slice(-10);
 
   const messagesForModel = [
     new SystemMessage(systemPrompt),
