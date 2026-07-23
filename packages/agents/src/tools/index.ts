@@ -15,3 +15,5 @@ export {
 export { searchWebTool, extractWebContentTool } from "./web-search.js";
 
 export { getLinkedInAnalyticsTool } from "./linkedin.js";
+
+export { generateVideoTool, generateImageTool } from "./video.js";

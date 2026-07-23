@@ -16,6 +16,8 @@ import {
   logAgentActionTool,
   searchWebTool,
   getLinkedInAnalyticsTool,
+  generateVideoTool,
+  generateImageTool,
 } from "../tools/index.js";
 import { searchMemories, storeMemory } from "../memory/index.js";
 import { lastMessageType } from "../messages.js";
@@ -39,6 +41,8 @@ const NOVA_CONTEXT = `
 - Newsletter editions
 - Product announcements
 - Counterfeit awareness campaigns
+- Short AI-generated videos (product demos, explainers, social clips) — use generate_video
+- AI-generated images (carousel slides, thumbnails, social visuals) — use generate_image
 
 # Daily Content Generation
 When asked to generate daily content:
@@ -86,7 +90,7 @@ export async function novaNode(
 
   const systemPrompt = buildSystemPrompt("nova", NOVA_CONTEXT + memoryContext);
 
-  const novaTools = [searchWebTool, getContentItemsTool, createContentItemTool, createApprovalTool, logAgentActionTool, getLinkedInAnalyticsTool];
+  const novaTools = [searchWebTool, getContentItemsTool, createContentItemTool, createApprovalTool, logAgentActionTool, getLinkedInAnalyticsTool, generateVideoTool, generateImageTool];
 
 
   const novaMessages = [
