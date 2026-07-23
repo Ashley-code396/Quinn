@@ -6,6 +6,7 @@
  */
 
 import { Queue, Worker } from "bullmq";
+import { Redis } from "ioredis";
 import {
   buildQuinnGraph,
   runDailyBriefing,
@@ -20,12 +21,33 @@ import {
 } from "@quinn/agents";
 import type { QuinnGraph } from "@quinn/agents";
 import type { AgentReport } from "@quinn/shared";
-import { getRedis } from "@quinn/shared";
 
 const QUEUE_NAME = "quinn-scheduler";
 
+// Dedicated Redis connection for BullMQ — uses its own connection
+// so blocking commands (bzpopmin) don't interfere with the shared cache client.
+let queueConnection: Redis | null = null;
+function getQueueConnection(): Redis {
+  if (!queueConnection) {
+    queueConnection = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379", {
+      maxRetriesPerRequest: null,
+      connectTimeout: 10_000,
+      retryStrategy(times) {
+        return Math.min(times * 1000, 10_000);
+      },
+      keepAlive: 10_000,
+    });
+    queueConnection.on("error", (err) => {
+      if (err.message !== "Stream is closed" && !err.message?.includes("ECONNRESET")) {
+        console.error("⚠️ BullMQ Redis error:", err.message);
+      }
+    });
+  }
+  return queueConnection;
+}
+
 export async function createScheduler() {
-  const connection = getRedis();
+  const connection = getQueueConnection();
 
   const queue = new Queue(QUEUE_NAME, { connection: connection as any });
 
@@ -117,7 +139,7 @@ export async function createScheduler() {
 }
 
 export async function createWorker() {
-  const connection = getRedis();
+  const connection = getQueueConnection();
 
   let graph: QuinnGraph | null = null;
 
