@@ -281,48 +281,68 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
     const text = ctx.message.text.trim();
     if (text.startsWith("/")) return;
 
-    const chatId = ctx.chat?.id;
-    if (chatId) authorizedChatId = String(chatId);
-    const threadId = chatId ? `telegram-${chatId}` : undefined;
+    const chatId = ctx.chat?.id as number | undefined;
+    if (!chatId) return;
+    authorizedChatId = String(chatId);
+    const threadId = `telegram-${chatId}`;
     const sessionId = threadId;
 
     if (sessionId && isRedisMemoryConfigured()) {
-      storeSessionEvent({
-        sessionId,
-        actorId: ctx.from?.id.toString() ?? "unknown",
-        role: "USER",
-        text,
-      }).catch(() => {});
+      storeSessionEvent({ sessionId, actorId: ctx.from?.id.toString() ?? "unknown", role: "USER", text }).catch(() => {});
     }
 
-    await ctx.sendChatAction("typing");
+    // Immediate acknowledgment so user knows the bot is working
+    const statusMsg = await ctx.reply("👋 On it!");
+    const statusMsgId = statusMsg.message_id;
+
+    // Renew typing indicator every 4s — Telegram clears it after ~5s
+    const typingInterval = setInterval(() => {
+      ctx.sendChatAction("typing").catch(() => {});
+    }, 4000);
+
+    let seenReportCount = 0;
+    let consultedBefore = 0;
 
     try {
-      let seenReportCount = 0;
       const result = await chatWithQuinn(graph, text, threadId, async (state) => {
+        // Show progress as agents begin working
+        const consulted = (state.consultedAgents as string[] | undefined) ?? [];
+        if (consulted.length > consultedBefore) {
+          consultedBefore = consulted.length;
+          const current = consulted[consulted.length - 1] as string;
+          const emoji = getAgentEmoji(current);
+          try {
+            await ctx.telegram.editMessageText(chatId, statusMsgId, undefined, `${emoji} Asking ${current}...`);
+          } catch { /* race: message may be gone */ }
+        }
+
+        // Push completed agent findings
         const reports = (state.agentReports as AgentReport[] | undefined) ?? [];
         if (reports.length > seenReportCount) {
           await pushFindingsToTelegram(state, seenReportCount);
           seenReportCount = reports.length;
         }
       });
+
+      clearInterval(typingInterval);
+
+      // Clean up status message
+      try { await ctx.telegram.deleteMessage(chatId, statusMsgId); } catch { /* already gone */ }
+
+      // Send final Quinn response
       const msgs = (result.messages as BaseMessage[]) ?? [];
       const lastMessage = msgs[msgs.length - 1];
       const answer = lastMessage?.content?.toString() ?? "";
       if (answer) {
         if (sessionId && isRedisMemoryConfigured()) {
-          storeSessionEvent({
-            sessionId,
-            actorId: "quinn",
-            role: "ASSISTANT",
-            text: answer.slice(0, 4000),
-          }).catch(() => {});
+          storeSessionEvent({ sessionId, actorId: "quinn", role: "ASSISTANT", text: answer.slice(0, 4000) }).catch(() => {});
         }
-        await ctx.reply(sanitizeMarkdown(answer.slice(0, 4000)), { parse_mode: "Markdown" });
+        await ctx.reply(sanitizeMarkdown(answer), { parse_mode: "Markdown" });
       }
     } catch (error) {
+      clearInterval(typingInterval);
       console.error("❌ Chat error:", error);
-      await ctx.reply("Sorry, I hit an issue. Can you rephrase that?");
+      try { await ctx.telegram.editMessageText(chatId, statusMsg.message_id, undefined, "❌ Sorry, I hit an issue. Try rephrasing that."); } catch { /* already gone */ }
     }
   });
 
