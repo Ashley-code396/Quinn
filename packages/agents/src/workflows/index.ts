@@ -1,6 +1,9 @@
-import { HumanMessage } from "@langchain/core/messages";
+import { HumanMessage, AIMessage } from "@langchain/core/messages";
 import type { QuinnGraph } from "../graph.js";
 import { getCurrentQuarter } from "@quinn/shared";
+import type { QuinnStateType } from "../state.js";
+import { novaNode, atlasNode, helixNode } from "../agents/index.js";
+import { pushFindingsToTelegram, pushApprovalsToTelegram } from "../telegram/index.js";
 
 type StepCallback = (state: Record<string, unknown>) => Promise<void> | void;
 
@@ -138,5 +141,63 @@ export async function chatWithQuinn(
     },
     { configurable: { thread_id: threadId ?? `chat-${Date.now()}` } },
     onStep,
+  );
+}
+
+/**
+ * Run an agent autonomously — directly invokes the agent node without
+ * going through the Quinn supervisor graph. The agent runs with its
+ * full toolset (create_approval, create_content_item, etc.) and takes
+ * real actions, then results are pushed to Telegram.
+ */
+async function runAgentAutonomous(
+  agentNode: (state: QuinnStateType) => Promise<Partial<QuinnStateType>>,
+  task: string,
+  trigger: string,
+): Promise<Record<string, unknown>> {
+  const state = {
+    messages: [new HumanMessage({ content: task })],
+    next: "__end__",
+    trigger,
+    quarterlyGoalsContext: "",
+    agentReports: [],
+    recommendations: [],
+    alerts: [],
+    iterationCount: 0,
+    consultedAgents: [],
+  } as unknown as QuinnStateType;
+
+  const result = await agentNode(state);
+  const fullResult = { ...state, ...result } as unknown as Record<string, unknown>;
+  await pushFindingsToTelegram(fullResult);
+  return fullResult;
+}
+
+/** Nova autonomously generates content and submits it for approval. */
+export async function runNovaAutonomous(task?: string): Promise<Record<string, unknown>> {
+  const result = await runAgentAutonomous(
+    novaNode,
+    task ?? "It's a new day. Review the content calendar for gaps, search the web for trending skincare/beauty topics that match our pillars, then generate a LinkedIn post. Create the content item and submit it for approval via create_approval. Work autonomously — do not ask for permission, just create and submit.",
+    "content-generation",
+  );
+  await pushApprovalsToTelegram();
+  return result;
+}
+
+/** Atlas autonomously finds opportunities and creates approval requests. */
+export async function runAtlasAutonomous(task?: string): Promise<Record<string, unknown>> {
+  return runAgentAutonomous(
+    atlasNode,
+    task ?? "Proactive opportunity sweep. Search the web for currently open grant programs, conferences accepting applications, and accelerators with upcoming deadlines in beauty-tech, anti-counterfeit, supply chain, and consumer safety. For every time-sensitive opportunity you find, create an approval request via create_approval with type GRANT_APPLICATION or CONFERENCE_REGISTRATION so the user can apply immediately. Include full details — name, URL, deadline, and why Dermaqea should pursue it.",
+    "opportunity-sweep",
+  );
+}
+
+/** Helix autonomously drafts proposals and submits for approval. */
+export async function runHelixAutonomous(task?: string): Promise<Record<string, unknown>> {
+  return runAgentAutonomous(
+    helixNode,
+    task ?? "Proactive proposal drafting. Based on recent opportunities, grants, and partnership leads in memory, draft a grant application or partnership proposal. Structure it with clear sections, key messaging aligned with Dermaqea's mission, and a compelling case. Submit the full draft for approval via create_approval so the user can review and approve it immediately.",
+    "proposal-drafting",
   );
 }

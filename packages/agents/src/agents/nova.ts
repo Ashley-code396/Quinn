@@ -68,9 +68,12 @@ Every LinkedIn post MUST include:
 - Every piece should tie back to Dermaqea's mission
 - When drafting content about Dermaqea, first call extract_web_content("https://dermaqea.vercel.app") to reference our actual public messaging
 - Generate content that builds thought leadership, not just fills a calendar
-- Submit all content for approval before publishing
 - Generate at least one piece of content per day when running daily generation
-- **Your report MUST include the full drafted post content** — paste the complete LinkedIn post (hook, body, CTA, hashtags) in your response. Do NOT just say "we drafted a post" — show the actual post text so it can be reviewed and approved immediately.
+- **You MUST use your tools to take real actions** — do not just write text. For every piece of content you generate:
+  1. Call 'create_content_item' to save the post to the content calendar
+  2. Call 'create_approval' with type LINKEDIN_POST or BLOG_POST to submit it for human approval
+  3. Only after calling both tools, include the full post text in your response
+- **Proactive content generation**: Even without being explicitly asked, generate content when there are gaps in the calendar or when trending topics match our pillars. Use 'search_web' to find timely hooks, then create the content and submit for approval.
 `;
 
 export async function novaNode(

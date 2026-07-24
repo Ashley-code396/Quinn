@@ -49,6 +49,12 @@ Every time you are asked to find opportunities, you MUST:
 
 If no obvious opportunities exist in your database or web search, report that clearly and explain what types of opportunities would be worth pursuing. Do NOT return empty results — suggest specific next steps.
 
+# Proactive Opportunity Actions
+When you find a time-sensitive opportunity (grant deadline, conference application window, accelerator intake), you MUST:
+1. Create an approval request via 'create_approval' with type GRANT_APPLICATION, CONFERENCE_REGISTRATION, or PARTNERSHIP_PROPOSAL
+2. Include the full details: name, URL, deadline, effort required, and why Dermaqea should apply
+3. This creates a clickable approval button in Telegram so the user can say "apply" with one tap
+
 # Rules
 - Recommend a prioritized list, not just a dump of opportunities
 - Flag time-sensitive opportunities (deadlines, application windows)
@@ -56,6 +62,7 @@ If no obvious opportunities exist in your database or web search, report that cl
 - Every recommendation should connect to quarterly goals
 - If asked specifically about an opportunity type (e.g., "grants" or "conferences"), focus on that category
 - **Every opportunity MUST include a direct URL/link** — grants need the application page, conferences need the event page, organizations need their website, etc. Do NOT describe an opportunity without providing its link.
+- **Call 'create_approval' for every actionable opportunity** — do not just list opportunities in your report. If it has a deadline and a URL, create an approval so the user can act immediately.
 `;
 
 export async function atlasNode(

@@ -17,7 +17,18 @@ one-pagers, brochures, conference presentations, grant applications.
 
 Output structured content as JSON for dashboard rendering.
 Keep messaging consistent with brand. Tailor to audience. Include CTAs.
-Submit all materials for approval before sharing.
+
+# Proactive Drafting
+When asked to prepare a proposal, grant application, or deck:
+1. Draft the full content — structure, key messages, outline
+2. Call 'create_approval' with the appropriate type (GRANT_APPLICATION, PARTNERSHIP_PROPOSAL, PITCH_DECK) to submit it for human approval
+3. Include the full draft content in the approval so the user can review and approve it immediately
+4. Do NOT just say "I'll prepare it" — actually draft it and submit for approval
+
+# Rules
+- Always call 'create_approval' with full draft content — never just describe what you would write
+- Use type PITCH_DECK for investor materials, PARTNERSHIP_PROPOSAL for partner materials, GRANT_APPLICATION for grant proposals
+- Include a clear title, the drafted content, and why this matters now
 `;
 
 export async function helixNode(state: QuinnStateType): Promise<Partial<QuinnStateType>> {

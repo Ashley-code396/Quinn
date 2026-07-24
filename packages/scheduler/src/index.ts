@@ -14,6 +14,9 @@ import {
   runWeeklyPriorities,
   runQuarterlyPlanning,
   chatWithQuinn,
+  runNovaAutonomous,
+  runAtlasAutonomous,
+  runHelixAutonomous,
   isLinkedInConfigured,
   getLinkedInPageAnalytics,
   pushApprovalsToTelegram,
@@ -74,11 +77,25 @@ export async function createScheduler() {
     { name: "analytics-snapshot", data: { workflow: "analytics-snapshot" } },
   );
 
-  // Content generation — every day at 7:30 AM
+  // Content generation — every day at 7:30 AM (Nova runs autonomously)
   await queue.upsertJobScheduler(
     "content-generation",
     { pattern: "30 7 * * *" },
     { name: "content-generation", data: { workflow: "content-generation" } },
+  );
+
+  // Opportunity sweep — every day at 12:00 PM (Atlas runs autonomously)
+  await queue.upsertJobScheduler(
+    "opportunity-sweep",
+    { pattern: "0 12 * * *" },
+    { name: "opportunity-sweep", data: { workflow: "opportunity-sweep" } },
+  );
+
+  // Proposal drafting — every Wednesday at 2:00 PM (Helix runs autonomously)
+  await queue.upsertJobScheduler(
+    "proposal-drafting",
+    { pattern: "0 14 * * 3" },
+    { name: "proposal-drafting", data: { workflow: "proposal-drafting" } },
   );
 
   // LinkedIn post — every day at 10:00 AM (publish daily social content)
@@ -126,9 +143,11 @@ export async function createScheduler() {
   console.log("📅 Quinn scheduler initialized with cron jobs:");
   console.log("   • Research sweep:        0 6 * * *");
   console.log("   • Analytics snapshot:    0 7 * * *");
-  console.log("   • Content generation:    30 7 * * *");
+  console.log("   • Content generation:    30 7 * * *   (Nova — autonomous)");
   console.log("   • Daily briefing:        0 8 * * *");
   console.log("   • LinkedIn daily post:   0 10 * * *");
+  console.log("   • Opportunity sweep:     0 12 * * *   (Atlas — autonomous)");
+  console.log("   • Proposal drafting:     0 14 * * 3   (Helix — autonomous)");
   console.log("   • LinkedIn monitor:      0 18 * * *");
   console.log("   • Follow-up check:       0 9-18 * * * (hourly)");
   console.log("   • Weekly priorities:     0 9 * * 1");
@@ -181,8 +200,7 @@ export async function createWorker() {
             result = await chatWithQuinn(graph, "Run the analytics snapshot. Ask Beacon to review all KPIs, check quarterly goal progress, and flag any anomalies or metrics behind target.", undefined, onStep) as unknown as Record<string, unknown>;
             break;
           case "content-generation":
-            result = await chatWithQuinn(graph, "Run morning content generation. Ask Nova to review the content calendar, generate a LinkedIn post for today, generate any content due soon, and create draft content for the rest of this week. Submit all content for approval.", undefined, onStep) as unknown as Record<string, unknown>;
-            await pushApprovalsToTelegram();
+            result = await runNovaAutonomous() as unknown as Record<string, unknown>;
             break;
           case "linkedin-daily-post": {
             if (isLinkedInConfigured()) {
@@ -207,6 +225,12 @@ export async function createWorker() {
           }
           case "follow-up-check":
             result = await chatWithQuinn(graph, "Run a follow-up check. Ask Iris to review all relationships for overdue follow-ups, expiring opportunities, and CRM items needing attention today.", undefined, onStep) as unknown as Record<string, unknown>;
+            break;
+          case "opportunity-sweep":
+            result = await runAtlasAutonomous() as unknown as Record<string, unknown>;
+            break;
+          case "proposal-drafting":
+            result = await runHelixAutonomous() as unknown as Record<string, unknown>;
             break;
           case "weekly-report":
             result = await runWeeklyReport(graph, undefined, onStep) as unknown as Record<string, unknown>;
