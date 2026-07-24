@@ -326,6 +326,9 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
 
       clearInterval(typingInterval);
 
+      // Push any approvals created by agents during this chat
+      await pushApprovalsToTelegram();
+
       // Clean up status message
       try { await ctx.telegram.deleteMessage(chatId, statusMsgId); } catch { /* already gone */ }
 
@@ -342,7 +345,7 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
     } catch (error) {
       clearInterval(typingInterval);
       console.error("❌ Chat error:", error);
-      try { await ctx.telegram.editMessageText(chatId, statusMsg.message_id, undefined, "❌ Sorry, I hit an issue. Try rephrasing that."); } catch { /* already gone */ }
+      try { await ctx.telegram.editMessageText(chatId, statusMsgId, undefined, "❌ Sorry, I hit an issue. Try rephrasing that."); } catch { /* already gone */ }
     }
   });
 
