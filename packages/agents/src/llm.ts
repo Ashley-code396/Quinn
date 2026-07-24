@@ -50,6 +50,19 @@ function isQuotaError(error: unknown): boolean {
   );
 }
 
+function isToolCallError(error: unknown): boolean {
+  const err = error as any;
+  const code = err?.error?.code ?? err?.code ?? "";
+  const msg = (err?.message ?? err?.error?.message ?? "").toLowerCase();
+  return (
+    code === "tool_use_failed" ||
+    msg.includes("failed to call a function") ||
+    msg.includes("tool_use_failed") ||
+    msg.includes("invalid_function_call") ||
+    (err?.status === 400 && (msg.includes("function") || msg.includes("tool")))
+  );
+}
+
 function getGroqModel(desired?: string): string {
   return desired ?? "llama-3.3-70b-versatile";
 }
@@ -120,25 +133,31 @@ export async function withFallback<T>(
       openrouterErrors = 0;
       return result;
     } catch (error) {
-      const isMalformed = !isQuotaError(error) && (
+      const isMalformed = !isQuotaError(error) && !isToolCallError(error) && (
         (error instanceof TypeError && (error.message ?? "").includes("Cannot read properties of undefined"))
       );
 
-      if (!isQuotaError(error) && !isMalformed) throw error;
+      if (!isQuotaError(error) && !isMalformed && !isToolCallError(error)) throw error;
 
       const msg = (error as any)?.message ?? (error as any)?.error?.message ?? "Unknown error";
 
-      if (isMalformed) {
-        if (currentProvider === "openrouter") {
-          console.warn("  ⚠️ OpenRouter returned a malformed response — switching to Groq");
-          currentProvider = "groq";
-          openrouterErrors = 0;
+      if (isMalformed || isToolCallError(error)) {
+        if (currentProvider === "groq") {
+          console.warn("  ⚠️ Groq tool call failed — switching to Gemini");
+          currentProvider = isGeminiConfigured() ? "gemini" : "openrouter";
+          groqErrors = 0;
           continue;
         }
         if (currentProvider === "gemini") {
-          console.warn("  ⚠️ Gemini returned a malformed response — switching to Groq");
-          currentProvider = "groq";
+          console.warn("  ⚠️ Gemini tool call failed — switching to OpenRouter");
+          currentProvider = "openrouter";
           geminiErrors = 0;
+          continue;
+        }
+        if (currentProvider === "openrouter") {
+          console.warn("  ⚠️ OpenRouter tool call failed — switching to Groq");
+          currentProvider = "groq";
+          openrouterErrors = 0;
           continue;
         }
         throw error;
