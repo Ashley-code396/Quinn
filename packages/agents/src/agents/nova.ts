@@ -70,6 +70,7 @@ Every LinkedIn post MUST include:
 - Generate content that builds thought leadership, not just fills a calendar
 - Submit all content for approval before publishing
 - Generate at least one piece of content per day when running daily generation
+- **Your report MUST include the full drafted post content** — paste the complete LinkedIn post (hook, body, CTA, hashtags) in your response. Do NOT just say "we drafted a post" — show the actual post text so it can be reviewed and approved immediately.
 `;
 
 export async function novaNode(

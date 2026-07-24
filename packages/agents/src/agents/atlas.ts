@@ -55,6 +55,7 @@ If no obvious opportunities exist in your database or web search, report that cl
 - Consider Dermaqea's current stage — we're pre-revenue, so capital-efficient opportunities come first
 - Every recommendation should connect to quarterly goals
 - If asked specifically about an opportunity type (e.g., "grants" or "conferences"), focus on that category
+- **Every opportunity MUST include a direct URL/link** — grants need the application page, conferences need the event page, organizations need their website, etc. Do NOT describe an opportunity without providing its link.
 `;
 
 export async function atlasNode(
