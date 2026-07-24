@@ -137,24 +137,24 @@ export async function pushFindingsToTelegram(
       ? workflowTrigger.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
       : "Agent Report";
     try {
-      await bot.telegram.sendMessage(chatId, `📋 *${workflowLabel}*`, { parse_mode: "Markdown" });
+      await bot.telegram.sendMessage(chatId, `📋 ${workflowLabel}`);
     } catch { /* ignore header errors */ }
   }
 
   for (const report of newReports) {
     const emoji = getAgentEmoji(report.agentName);
-    const header = `${emoji} *${report.agentName.toUpperCase()}*`;
-    const summaryLine = report.summary ? `_${report.summary}_` : "";
+    const header = `${emoji} ${report.agentName.toUpperCase()}`;
+    const summaryLine = report.summary;
 
     try {
-      await bot.telegram.sendMessage(chatId, sanitizeMarkdown([header, summaryLine].filter(Boolean).join("\n")), { parse_mode: "Markdown" });
+      await bot.telegram.sendMessage(chatId, [header, summaryLine].filter(Boolean).join("\n"));
     } catch { /* skip header errors */ }
 
     for (const finding of report.findings.slice(0, 6)) {
       const chunks = splitIntoChunks(finding, 3900);
       for (const chunk of chunks) {
         try {
-          await bot.telegram.sendMessage(chatId, sanitizeMarkdown(chunk), { parse_mode: "Markdown" });
+          await bot.telegram.sendMessage(chatId, chunk);
         } catch { /* skip chunk errors */ }
       }
     }
@@ -167,7 +167,7 @@ export async function pushFindingsToTelegram(
       const chunks = splitIntoChunks(briefing, 3900);
       for (const chunk of chunks) {
         try {
-          await bot.telegram.sendMessage(chatId, sanitizeMarkdown(chunk), { parse_mode: "Markdown" });
+          await bot.telegram.sendMessage(chatId, chunk);
         } catch (err) {
           console.error("Failed to push briefing chunk to Telegram:", (err as Error).message);
         }
@@ -340,7 +340,11 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
         if (sessionId && isRedisMemoryConfigured()) {
           storeSessionEvent({ sessionId, actorId: "quinn", role: "ASSISTANT", text: answer.slice(0, 4000) }).catch(() => {});
         }
-        await ctx.reply(sanitizeMarkdown(answer), { parse_mode: "Markdown" });
+        try {
+          await ctx.reply(sanitizeMarkdown(answer), { parse_mode: "Markdown" });
+        } catch {
+          await ctx.reply(answer);
+        }
       }
     } catch (error) {
       clearInterval(typingInterval);

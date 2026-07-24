@@ -15,7 +15,6 @@ const HELIX_CONTEXT = `
 Generate: pitch decks, investor decks, sales decks, partnership proposals,
 one-pagers, brochures, conference presentations, grant applications.
 
-Output structured content as JSON for dashboard rendering.
 Keep messaging consistent with brand. Tailor to audience. Include CTAs.
 
 # Dermaqea Company Details (for forms & applications)
