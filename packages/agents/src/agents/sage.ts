@@ -90,7 +90,7 @@ export async function sageNode(
     { temperature: 0.4 },
   );
 
-  if (response.tool_calls?.length && !response.content?.toString().trim()) {
+  if (response.tool_calls?.length) {
     const toolResults: string[] = [];
     for (const tc of response.tool_calls) {
       const tool = sageTools.find(t => t.name === tc.name);
@@ -99,8 +99,9 @@ export async function sageNode(
         toolResults.push(`${tc.name} returned:\n${typeof result === "string" ? result.slice(0, 2000) : JSON.stringify(result).slice(0, 2000)}`);
       }
     }
+    const existingContent = response.content?.toString()?.trim() || "Tools executed.";
     const followUp = new HumanMessage(
-      `Tool results:\n\n${toolResults.join("\n\n")}\n\nSummarize your research findings based on these results.`
+      `Tool results:\n\n${toolResults.join("\n\n")}\n\nYour previous message: ${existingContent.slice(0, 1000)}\n\nSummarize your research findings based on these results.`
     );
     response = await withFallback(
       async (model) => model.invoke([...sageMessages, response, followUp]),

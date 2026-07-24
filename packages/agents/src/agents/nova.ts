@@ -114,7 +114,7 @@ export async function novaNode(
   );
 
 
-  if (response.tool_calls?.length && !response.content?.toString().trim()) {
+  if (response.tool_calls?.length) {
     const toolResults: string[] = [];
     for (const tc of response.tool_calls) {
       const tool = novaTools.find(t => t.name === tc.name);
@@ -123,8 +123,9 @@ export async function novaNode(
         toolResults.push(`${tc.name} returned:\n${typeof result === "string" ? result.slice(0, 2000) : JSON.stringify(result).slice(0, 2000)}`);
       }
     }
+    const existingContent = response.content?.toString()?.trim() || "Tools executed.";
     const followUp = new HumanMessage(
-      `Tool results:\n\n${toolResults.join("\n\n")}\n\nSummarize your content findings based on these results.`
+      `You called tools and got these results:\n\n${toolResults.join("\n\n")}\n\nYour previous message was: ${existingContent.slice(0, 1000)}\n\nNow summarize what you created and submitted for approval.`
     );
     response = await withFallback(
       async (model) => model.invoke([...novaMessages, response, followUp]),
