@@ -74,7 +74,7 @@ export async function helixNode(state: QuinnStateType): Promise<Partial<QuinnSta
   return {
     next: "quinn",
     messages: [new AIMessage({ content: helixContent, name: "helix" })],
-    agentReports: [{ agentName: "helix", summary: "Presentation & asset report", findings: [helixContent.slice(0, 500)], recommendations: [], actionItems: [], timestamp: new Date() }],
+    agentReports: [{ agentName: "helix", summary: "Presentation & asset report", findings: [helixContent], recommendations: [], actionItems: [], timestamp: new Date() }],
   };
 }
 

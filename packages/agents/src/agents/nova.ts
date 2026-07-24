@@ -152,7 +152,7 @@ export async function novaNode(
       {
         agentName: "nova",
         summary: "Content marketing report",
-        findings: [novaContent.slice(0, 500)],
+        findings: [novaContent],
         recommendations: [],
         actionItems: [],
         timestamp: new Date(),

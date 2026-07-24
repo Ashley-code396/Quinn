@@ -143,17 +143,20 @@ export async function pushFindingsToTelegram(
 
   for (const report of newReports) {
     const emoji = getAgentEmoji(report.agentName);
-    const findingsText = report.findings.slice(0, 6).map((f, i) => `${i + 1}. ${f}`).join("\n");
-    const msg = [
-      `${emoji} *${report.agentName.toUpperCase()}*`,
-      report.summary ? `_${report.summary}_` : "",
-      findingsText ? `\n${findingsText}` : "",
-    ].filter(Boolean).join("\n");
+    const header = `${emoji} *${report.agentName.toUpperCase()}*`;
+    const summaryLine = report.summary ? `_${report.summary}_` : "";
 
     try {
-      await bot.telegram.sendMessage(chatId, sanitizeMarkdown(msg.slice(0, 4000)), { parse_mode: "Markdown" });
-    } catch (err) {
-      console.error("Failed to push agent finding to Telegram:", (err as Error).message);
+      await bot.telegram.sendMessage(chatId, sanitizeMarkdown([header, summaryLine].filter(Boolean).join("\n")), { parse_mode: "Markdown" });
+    } catch { /* skip header errors */ }
+
+    for (const finding of report.findings.slice(0, 6)) {
+      const chunks = splitIntoChunks(finding, 3900);
+      for (const chunk of chunks) {
+        try {
+          await bot.telegram.sendMessage(chatId, sanitizeMarkdown(chunk), { parse_mode: "Markdown" });
+        } catch { /* skip chunk errors */ }
+      }
     }
   }
 
@@ -161,10 +164,13 @@ export async function pushFindingsToTelegram(
     const finalMessage = messages?.[messages.length - 1];
     const briefing = finalMessage?.content?.toString() ?? "";
     if (briefing && briefing.length > 20) {
-      try {
-        await bot.telegram.sendMessage(chatId, sanitizeMarkdown(briefing.slice(0, 4000)), { parse_mode: "Markdown" });
-      } catch (err) {
-        console.error("Failed to push briefing to Telegram:", (err as Error).message);
+      const chunks = splitIntoChunks(briefing, 3900);
+      for (const chunk of chunks) {
+        try {
+          await bot.telegram.sendMessage(chatId, sanitizeMarkdown(chunk), { parse_mode: "Markdown" });
+        } catch (err) {
+          console.error("Failed to push briefing chunk to Telegram:", (err as Error).message);
+        }
       }
     }
   }

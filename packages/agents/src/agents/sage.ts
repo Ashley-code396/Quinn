@@ -131,7 +131,7 @@ export async function sageNode(
       {
         agentName: "sage",
         summary: "Research intelligence report",
-        findings: [sageContent.slice(0, 500)],
+        findings: [sageContent],
         recommendations: [],
         actionItems: [],
         timestamp: new Date(),

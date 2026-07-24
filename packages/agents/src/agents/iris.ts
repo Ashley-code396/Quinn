@@ -122,7 +122,7 @@ export async function irisNode(
       {
         agentName: "iris",
         summary: "Relationship management report",
-        findings: [irisContent.slice(0, 500)],
+        findings: [irisContent],
         recommendations: [],
         actionItems: [],
         timestamp: new Date(),

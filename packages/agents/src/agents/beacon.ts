@@ -72,6 +72,6 @@ export async function beaconNode(state: QuinnStateType): Promise<Partial<QuinnSt
   return {
     next: "quinn",
     messages: [new AIMessage({ content: beaconContent, name: "beacon" })],
-    agentReports: [{ agentName: "beacon", summary: "Analytics & performance report", findings: [beaconContent.slice(0, 500)], recommendations: [], actionItems: [], timestamp: new Date() }],
+    agentReports: [{ agentName: "beacon", summary: "Analytics & performance report", findings: [beaconContent], recommendations: [], actionItems: [], timestamp: new Date() }],
   };
 }

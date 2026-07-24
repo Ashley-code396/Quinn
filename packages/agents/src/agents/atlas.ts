@@ -133,7 +133,7 @@ export async function atlasNode(
       {
         agentName: "atlas",
         summary: "Growth & business development report",
-        findings: [atlasContent.slice(0, 500)],
+        findings: [atlasContent],
         recommendations: [],
         actionItems: [],
         timestamp: new Date(),
