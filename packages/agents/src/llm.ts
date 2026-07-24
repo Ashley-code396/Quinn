@@ -120,9 +120,30 @@ export async function withFallback<T>(
       openrouterErrors = 0;
       return result;
     } catch (error) {
-      if (!isQuotaError(error)) throw error;
+      const isMalformed = !isQuotaError(error) && (
+        (error instanceof TypeError && (error.message ?? "").includes("Cannot read properties of undefined"))
+      );
+
+      if (!isQuotaError(error) && !isMalformed) throw error;
 
       const msg = (error as any)?.message ?? (error as any)?.error?.message ?? "Unknown error";
+
+      if (isMalformed) {
+        if (currentProvider === "openrouter") {
+          console.warn("  ⚠️ OpenRouter returned a malformed response — switching to Groq");
+          currentProvider = "groq";
+          openrouterErrors = 0;
+          continue;
+        }
+        if (currentProvider === "gemini") {
+          console.warn("  ⚠️ Gemini returned a malformed response — switching to Groq");
+          currentProvider = "groq";
+          geminiErrors = 0;
+          continue;
+        }
+        throw error;
+      }
+
       const retryAfter = extractRetryAfter(error);
 
       if (currentProvider === "groq") {
