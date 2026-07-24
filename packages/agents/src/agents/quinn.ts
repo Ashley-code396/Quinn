@@ -97,6 +97,31 @@ export async function quinnNode(
   const recommendations = isNewUserMessage ? [] : state.recommendations;
   const alerts = isNewUserMessage ? [] : state.alerts;
 
+  // Pre-check: detect form-filling / application requests and route to Helix directly
+  // Bypasses the LLM routing decision since models often send this to Sage instead.
+  if (isNewUserMessage) {
+    const userText = lastMsg?.content?.toString() ?? "";
+    const lower = userText.toLowerCase();
+    const isFormRequest = (lower.includes("fill") || lower.includes("draft") || lower.includes("prepare")) &&
+      (lower.includes("form") || lower.includes("application") || lower.includes("appl"));
+    if (isFormRequest) {
+      return {
+        next: "helix",
+        messages: [
+          new AIMessage({
+            content: `Fill in this application form with Dermaqea's actual company details. Fill EVERY field — no placeholders, no blanks. Then call create_approval with the complete filled-in form so the user can review and submit it. Here is the form to fill: ${userText}`,
+            name: "quinn",
+          }),
+        ],
+        iterationCount: iterationCount + 1,
+        consultedAgents: ["helix" as never],
+        agentReports: [],
+        recommendations: [],
+        alerts: [],
+      };
+    }
+  }
+
   // Safety: prevent infinite delegation loops
   if (iterationCount >= MAX_ITERATIONS) {
     return {
