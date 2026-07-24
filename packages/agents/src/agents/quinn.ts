@@ -97,28 +97,69 @@ export async function quinnNode(
   const recommendations = isNewUserMessage ? [] : state.recommendations;
   const alerts = isNewUserMessage ? [] : state.alerts;
 
-  // Pre-check: detect form-filling / application requests and route to Helix directly
-  // Bypasses the LLM routing decision since models often send this to Sage instead.
+  // Pre-check: rule-based routing for common request patterns.
+  // Bypasses the LLM routing decision since models consistently route
+  // everything to Sage regardless of the prompt instructions.
   if (isNewUserMessage) {
     const userText = lastMsg?.content?.toString() ?? "";
     const lower = userText.toLowerCase();
-    const isFormRequest = (lower.includes("fill") || lower.includes("draft") || lower.includes("prepare")) &&
-      (lower.includes("form") || lower.includes("application") || lower.includes("appl"));
-    if (isFormRequest) {
-      return {
-        next: "helix",
-        messages: [
-          new AIMessage({
-            content: `Fill in this application form with Dermaqea's actual company details. Fill EVERY field — no placeholders, no blanks. Then call create_approval with the complete filled-in form so the user can review and submit it. Here is the form to fill: ${userText}`,
-            name: "quinn",
-          }),
-        ],
-        iterationCount: iterationCount + 1,
-        consultedAgents: ["helix" as never],
-        agentReports: [],
-        recommendations: [],
-        alerts: [],
-      };
+
+    interface RouteRule {
+      agent: string;
+      keywords: string[];
+      instruction: string;
+    }
+
+    const routes: RouteRule[] = [
+      {
+        agent: "helix",
+        keywords: ["fill in this form", "fill in this application", "fill in", "draft a proposal", "draft proposal", "grant application", "prepare a pitch deck", "pitch deck for"],
+        instruction: "Fill in or draft the requested materials with Dermaqea's actual company details. Call create_approval with the complete draft for review.",
+      },
+      {
+        agent: "atlas",
+        keywords: ["growth opportunities", "find opportunities", "active opportunities", "list of grants", "open grants", "upcoming conferences", "accelerator programs", "find partnerships", "pilot customers", "enterprise prospects"],
+        instruction: "Search the web for the requested opportunities. For every time-sensitive opportunity, call create_approval so the user can act immediately. Include direct URLs, deadlines, and why Dermaqea should pursue each one.",
+      },
+      {
+        agent: "sage",
+        keywords: ["do research", "research on", "competitor analysis", "industry trends", "market trends", "research about", "look into", "investigate"],
+        instruction: "Research the following topic thoroughly using search_web and extract_web_content. Provide detailed findings with sources.",
+      },
+      {
+        agent: "nova",
+        keywords: ["write a linkedin post", "write a post", "create a post", "create content", "linkedin post about", "blog post", "social media post"],
+        instruction: "Generate the requested content. Call create_content_item to save it and create_approval to submit for review.",
+      },
+      {
+        agent: "iris",
+        keywords: ["follow up", "who to contact", "relationship check", "crm update"],
+        instruction: "Check for overdue follow-ups and relationship health. Recommend specific actions.",
+      },
+      {
+        agent: "beacon",
+        keywords: ["analytics review", "metrics check", "kpi review", "performance report", "dashboard update"],
+        instruction: "Review the latest analytics snapshots and quarterly goal progress. Flag any anomalies or metrics behind target.",
+      },
+    ];
+
+    for (const route of routes) {
+      if (route.keywords.some((kw) => lower.includes(kw))) {
+        return {
+          next: route.agent,
+          messages: [
+            new AIMessage({
+              content: `${route.instruction}\n\nUser request: ${userText}`,
+              name: "quinn",
+            }),
+          ],
+          iterationCount: iterationCount + 1,
+          consultedAgents: [route.agent as never],
+          agentReports: [],
+          recommendations: [],
+          alerts: [],
+        };
+      }
     }
   }
 
