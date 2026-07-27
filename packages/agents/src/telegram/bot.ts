@@ -41,6 +41,12 @@ function sanitizeMarkdown(text: string): string {
   return result;
 }
 
+function sendSafeMessage(ctx: any, chatId: string | number, text: string): Promise<unknown> {
+  return ctx.telegram.sendMessage(chatId, text).catch(() =>
+    ctx.telegram.sendMessage(chatId, text.replace(/[*_`~\[\]()]/g, ""))
+  );
+}
+
 const ALLOWED_USERS = (process.env.TELEGRAM_ALLOWED_USERS ?? "")
   .split(",")
   .map((s) => s.trim())
@@ -196,7 +202,7 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
   const WORKFLOWS: Record<string, (g: QuinnGraph) => Promise<unknown>> = {
     "research-sweep": (g) => chatWithQuinn(g, "Run a research sweep. Ask Sage to search for new industry developments, competitor news, and emerging opportunities."),
     "analytics-snapshot": (g) => chatWithQuinn(g, "Run the analytics snapshot. Ask Beacon to review all KPIs, check quarterly goal progress, and flag any anomalies or metrics behind target."),
-    "content-generation": (g) => chatWithQuinn(g, "Run morning content generation. Ask Nova to review the content calendar, generate a LinkedIn post for today, generate any content due soon, and create draft content for the rest of this week. Submit all content for approval."),
+    "content-generation": (g) => chatWithQuinn(g, "Run morning content generation. Ask Nova to review the content calendar, generate a LinkedIn post for today with a matching image (use generate_image), publish with create_linkedin_post, generate any content due soon, and create draft content for the rest of this week. Submit all content for approval."),
     "daily-briefing": (g) => runDailyBriefing(g),
     "follow-up-check": (g) => chatWithQuinn(g, "Run a follow-up check. Ask Iris to review all relationships for overdue follow-ups, expiring opportunities, and CRM items needing attention today."),
     "weekly-priorities": (g) => runWeeklyPriorities(g),
@@ -356,31 +362,41 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
   bot.action(/approve:(.+)/, async (ctx) => {
     const id = ctx.match[1] as string;
     if (ctx.chat?.id) authorizedChatId = String(ctx.chat.id);
-    await ctx.answerCbQuery("Approving...");
+    await ctx.answerCbQuery("Approving...").catch(() => {});
     await handleApproval(ctx as any, id, "APPROVED");
-    await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
+    ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
   });
 
   bot.action(/reject:(.+)/, async (ctx) => {
     const id = ctx.match[1] as string;
     if (ctx.chat?.id) authorizedChatId = String(ctx.chat.id);
-    await ctx.answerCbQuery("Rejecting...");
+    await ctx.answerCbQuery("Rejecting...").catch(() => {});
     await handleApproval(ctx as any, id, "REJECTED");
-    await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
+    ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
   });
 
   bot.action(/view:(.+)/, async (ctx) => {
-    const id = ctx.match[1];
-    await ctx.answerCbQuery();
-    const approval = await prisma.approval.findUnique({ where: { id } });
-    if (!approval) {
-      await ctx.reply("Approval not found.");
-      return;
-    }
-    const content = typeof approval.content === "string" ? approval.content : JSON.stringify(approval.content, null, 2);
-    const chunks = splitIntoChunks(content, 3900);
-    for (const chunk of chunks) {
-      await ctx.reply(sanitizeMarkdown(chunk), { parse_mode: "Markdown" });
+    try {
+      const id = ctx.match[1] as string;
+      if (ctx.chat?.id) authorizedChatId = String(ctx.chat.id);
+      await ctx.answerCbQuery().catch(() => {});
+      const approval = await prisma.approval.findUnique({ where: { id } });
+      if (!approval) {
+        await ctx.reply("Approval not found.");
+        return;
+      }
+      const content = typeof approval.content === "string" ? approval.content : JSON.stringify(approval.content, null, 2);
+      const chunks = splitIntoChunks(content, 3900);
+      for (const chunk of chunks) {
+        try {
+          await ctx.reply(sanitizeMarkdown(chunk), { parse_mode: "Markdown" });
+        } catch {
+          await ctx.reply(chunk);
+        }
+      }
+    } catch (error) {
+      console.error("❌ View content error:", error);
+      try { await ctx.reply("Failed to load content. It may contain incompatible characters."); } catch {}
     }
   });
 
@@ -418,13 +434,20 @@ async function handleApproval(
     });
 
     const label = status === "APPROVED" ? "✅ Approved" : "❌ Rejected";
-    await ctx.reply(sanitizeMarkdown(`${label} *${approval.title}*${reason ? `\nReason: ${reason}` : ""}`), {
-      parse_mode: "Markdown",
-    });
+    const statusText = `${label} ${approval.title}${reason ? `\nReason: ${reason}` : ""}`;
+    try {
+      await ctx.reply(sanitizeMarkdown(statusText), { parse_mode: "Markdown" });
+    } catch {
+      await ctx.reply(statusText);
+    }
 
     if (status === "APPROVED") {
       const result = await executeApprovedAction(id);
-      await ctx.reply(sanitizeMarkdown(result.message), { parse_mode: "Markdown" });
+      try {
+        await ctx.reply(sanitizeMarkdown(result.message), { parse_mode: "Markdown" });
+      } catch {
+        await ctx.reply(result.message);
+      }
     }
   } catch (error) {
     await ctx.reply(`❌ Error processing approval: ${(error as Error).message}`);

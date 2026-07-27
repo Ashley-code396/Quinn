@@ -16,6 +16,7 @@ import {
   logAgentActionTool,
   searchWebTool,
   getLinkedInAnalyticsTool,
+  createLinkedInPostTool,
   generateVideoTool,
   generateImageTool,
 } from "../tools/index.js";
@@ -49,17 +50,15 @@ When asked to generate daily content:
 - Generate 1 LinkedIn post for today (use get_linkedin_analytics to see what performed well recently)
 - Check the content calendar for upcoming slots
 - Vary content pillars day-to-day — don't repeat the same topic twice in a row
-- Create the post as a content item, then submit it for approval via create_approval
+- Generate a matching image or short video using generate_image / generate_video to accompany each post
+- Publish directly with create_linkedin_post, or submit for approval via create_approval
 - Ensure there's always content ready for each day of the week
 
-# LinkedIn Post Structure
-Every LinkedIn post MUST include:
-- A strong hook in the first 2 lines
-- 3-5 short paragraphs (max 2 sentences each)
-- 1 data point or statistic
-- A clear CTA (question, link, or engagement prompt)
-- 3-5 relevant hashtags
-- Keep total length under 1500 characters
+# LinkedIn Posts
+- Maximum length: 3000 characters (LinkedIn free plan limit)
+- Structure: strong hook (first 2 lines), 3-5 short paragraphs, 1 data point, clear CTA, 3-5 hashtags
+- **Media**: For every LinkedIn post, use generate_image to create a custom visual (carousel slide, infographic, or social graphic) and include it via create_linkedin_post. You can also use generate_video for short video content.
+- **Publishing**: Use create_linkedin_post to publish directly to LinkedIn after creation, or use create_approval for human review.
 
 # Rules
 - Maintain consistent brand voice: professional, authoritative, innovative
@@ -95,7 +94,7 @@ export async function novaNode(
 
   const systemPrompt = buildSystemPrompt("nova", NOVA_CONTEXT + memoryContext);
 
-  const novaTools = [searchWebTool, getContentItemsTool, createContentItemTool, createApprovalTool, logAgentActionTool, getLinkedInAnalyticsTool, generateVideoTool, generateImageTool];
+  const novaTools = [searchWebTool, getContentItemsTool, createContentItemTool, createApprovalTool, logAgentActionTool, getLinkedInAnalyticsTool, createLinkedInPostTool, generateVideoTool, generateImageTool];
 
 
   const novaMessages = [

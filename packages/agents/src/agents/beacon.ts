@@ -5,18 +5,23 @@ import { createModel, withFallback } from "../llm.js";
 import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import type { QuinnStateType } from "../state.js";
 import { buildSystemPrompt } from "../prompts/system.js";
-import { getAnalyticsSnapshotsTool, getQuarterlyGoalsTool, logAgentActionTool, searchWebTool } from "../tools/index.js";
+import { getAnalyticsSnapshotsTool, createAnalyticsSnapshotTool, getQuarterlyGoalsTool, logAgentActionTool, searchWebTool } from "../tools/index.js";
 import { searchMemories, storeMemory } from "../memory/index.js";
 import { lastMessageType } from "../messages.js";
 
 const BEACON_CONTEXT = `
 # Analytics Responsibilities
-Track: LinkedIn growth, website traffic, content performance, outreach metrics,
-email response rates, meetings booked, partnership pipeline, grant applications, marketing KPIs.
+Track: LinkedIn growth (followers, engagement, impressions, clicks), website traffic,
+content performance, outreach metrics, email response rates, meetings booked,
+partnership pipeline, grant applications, marketing KPIs.
+
+# Account Monitoring
+- When given LinkedIn analytics data, use create_analytics_snapshot to record it as a daily snapshot
+- Monitor trends: is engagement growing? Are followers increasing? Which content performs best?
+- Compare current metrics against quarterly key result targets
+- Flag metrics that are behind target as risks
 
 Generate weekly executive reports. Recommend improvements using data.
-Compare current metrics against quarterly key result targets.
-Flag metrics that are behind target as risks.
 `;
 
 export async function beaconNode(state: QuinnStateType): Promise<Partial<QuinnStateType>> {
@@ -28,7 +33,7 @@ export async function beaconNode(state: QuinnStateType): Promise<Partial<QuinnSt
     ? `\n# Relevant Knowledge & Previous Analytics\n${memories.map((m) => `[${m.category}] ${m.content}`).join("\n")}`
     : "";
 
-  const beaconTools = [searchWebTool, getAnalyticsSnapshotsTool, getQuarterlyGoalsTool, logAgentActionTool];
+  const beaconTools = [searchWebTool, getAnalyticsSnapshotsTool, createAnalyticsSnapshotTool, getQuarterlyGoalsTool, logAgentActionTool];
 
   const beaconMessages = [
     new SystemMessage(buildSystemPrompt("beacon", BEACON_CONTEXT + memCtx)),

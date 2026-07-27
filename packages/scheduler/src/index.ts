@@ -63,7 +63,7 @@ export async function createScheduler() {
     { name: "daily-briefing", data: { workflow: "daily-briefing" } },
   );
 
-  // Morning research sweep — every day at 6:00 AM (before briefing)
+  // Morning research sweep — every day at 6:00 AM
   await queue.upsertJobScheduler(
     "research-sweep",
     { pattern: "0 6 * * *" },
@@ -77,46 +77,53 @@ export async function createScheduler() {
     { name: "analytics-snapshot", data: { workflow: "analytics-snapshot" } },
   );
 
-  // Content generation — every day at 7:30 AM (Nova runs autonomously)
+  // Content generation + LinkedIn post with image/video — every day at 7:30 AM
   await queue.upsertJobScheduler(
     "content-generation",
     { pattern: "30 7 * * *" },
     { name: "content-generation", data: { workflow: "content-generation" } },
   );
 
-  // Opportunity sweep — every day at 12:00 PM (Atlas runs autonomously)
-  await queue.upsertJobScheduler(
-    "opportunity-sweep",
-    { pattern: "0 12 * * *" },
-    { name: "opportunity-sweep", data: { workflow: "opportunity-sweep" } },
-  );
-
-  // Proposal drafting — every Wednesday at 2:00 PM (Helix runs autonomously)
-  await queue.upsertJobScheduler(
-    "proposal-drafting",
-    { pattern: "0 14 * * 3" },
-    { name: "proposal-drafting", data: { workflow: "proposal-drafting" } },
-  );
-
-  // LinkedIn post — every day at 10:00 AM (publish daily social content)
-  await queue.upsertJobScheduler(
-    "linkedin-daily-post",
-    { pattern: "0 10 * * *" },
-    { name: "linkedin-daily-post", data: { workflow: "linkedin-daily-post" } },
-  );
-
-  // LinkedIn monitoring — every day at 6:00 PM (check engagement)
+  // LinkedIn monitoring (Dermaqea account) — every day at 9:00 AM
   await queue.upsertJobScheduler(
     "linkedin-monitor",
-    { pattern: "0 18 * * *" },
+    { pattern: "0 9 * * *" },
     { name: "linkedin-monitor", data: { workflow: "linkedin-monitor" } },
   );
 
-  // Follow-up check — hourly during business hours (9 AM - 6 PM)
+  // Relationship follow-up check — once daily at 10:00 AM
   await queue.upsertJobScheduler(
     "follow-up-check",
-    { pattern: "0 9-18 * * *" },
+    { pattern: "0 10 * * *" },
     { name: "follow-up-check", data: { workflow: "follow-up-check" } },
+  );
+
+  // Morning opportunity sweep (Atlas + Helix) — every day at 11:00 AM
+  await queue.upsertJobScheduler(
+    "opportunity-sweep",
+    { pattern: "0 11 * * *" },
+    { name: "opportunity-sweep", data: { workflow: "opportunity-sweep" } },
+  );
+
+  // Afternoon research sweep — every day at 2:00 PM
+  await queue.upsertJobScheduler(
+    "research-sweep-afternoon",
+    { pattern: "0 14 * * *" },
+    { name: "research-sweep-afternoon", data: { workflow: "research-sweep-afternoon" } },
+  );
+
+  // Afternoon opportunity sweep (Atlas + Helix) — every day at 3:00 PM
+  await queue.upsertJobScheduler(
+    "opportunity-sweep-afternoon",
+    { pattern: "0 15 * * *" },
+    { name: "opportunity-sweep-afternoon", data: { workflow: "opportunity-sweep-afternoon" } },
+  );
+
+  // LinkedIn engagement monitor — every day at 6:00 PM
+  await queue.upsertJobScheduler(
+    "linkedin-evening-monitor",
+    { pattern: "0 18 * * *" },
+    { name: "linkedin-evening-monitor", data: { workflow: "linkedin-evening-monitor" } },
   );
 
   // Weekly priorities — Monday at 9:00 AM
@@ -141,18 +148,19 @@ export async function createScheduler() {
   );
 
   console.log("📅 Quinn scheduler initialized with cron jobs:");
-  console.log("   • Research sweep:        0 6 * * *");
-  console.log("   • Analytics snapshot:    0 7 * * *");
-  console.log("   • Content generation:    30 7 * * *   (Nova — autonomous)");
-  console.log("   • Daily briefing:        0 8 * * *");
-  console.log("   • LinkedIn daily post:   0 10 * * *");
-  console.log("   • Opportunity sweep:     0 12 * * *   (Atlas — autonomous)");
-  console.log("   • Proposal drafting:     0 14 * * 3   (Helix — autonomous)");
-  console.log("   • LinkedIn monitor:      0 18 * * *");
-  console.log("   • Follow-up check:       0 9-18 * * * (hourly)");
-  console.log("   • Weekly priorities:     0 9 * * 1");
-  console.log("   • Weekly report:         0 17 * * 5");
-  console.log("   • Quarterly planning:    0 9 1 1,4,7,10 *");
+  console.log("   • Research sweep (AM):        0 6 * * *");
+  console.log("   • Analytics snapshot:          0 7 * * *");
+  console.log("   • Content + LinkedIn post:     30 7 * * *   (Nova — w/ image/video)");
+  console.log("   • Daily briefing:              0 8 * * *");
+  console.log("   • LinkedIn monitor (AM):       0 9 * * *");
+  console.log("   • Follow-up check:             0 10 * * *   (once daily)");
+  console.log("   • Opportunity sweep (AM):      0 11 * * *   (Atlas + Helix)");
+  console.log("   • Research sweep (PM):         0 14 * * *");
+  console.log("   • Opportunity sweep (PM):      0 15 * * *   (Atlas + Helix)");
+  console.log("   • LinkedIn monitor (PM):       0 18 * * *");
+  console.log("   • Weekly priorities:           0 9 * * 1");
+  console.log("   • Weekly report:               0 17 * * 5");
+  console.log("   • Quarterly planning:          0 9 1 1,4,7,10 *");
 
   return { queue };
 }
@@ -196,41 +204,50 @@ export async function createWorker() {
           case "research-sweep":
             result = await chatWithQuinn(graph, "Run a morning research sweep. Ask Sage to search for new industry developments, competitor news, and emerging opportunities. Store any findings.", undefined, onStep) as unknown as Record<string, unknown>;
             break;
+          case "research-sweep-afternoon":
+            result = await chatWithQuinn(graph, "Run an afternoon research sweep. Ask Sage to search for any late-breaking industry news, competitor moves, or emerging opportunities that came up today. Store any findings.", undefined, onStep) as unknown as Record<string, unknown>;
+            break;
           case "analytics-snapshot":
             result = await chatWithQuinn(graph, "Run the analytics snapshot. Ask Beacon to review all KPIs, check quarterly goal progress, and flag any anomalies or metrics behind target.", undefined, onStep) as unknown as Record<string, unknown>;
             break;
           case "content-generation":
             result = await runNovaAutonomous() as unknown as Record<string, unknown>;
             break;
-          case "linkedin-daily-post": {
-            if (isLinkedInConfigured()) {
-              result = await chatWithQuinn(graph, "Daily LinkedIn content generation. Ask Nova to review the content calendar, check get_linkedin_analytics for recent post performance, and generate a LinkedIn post for today about Dermaqea's mission, a counterfeit awareness tip, or an industry insight. Create the content item and submit it for approval via create_approval — never publish directly.", undefined, onStep) as unknown as Record<string, unknown>;
-              await pushApprovalsToTelegram();
-            } else {
-              console.log("  ⏭️ LinkedIn not configured — skipping daily post");
-            }
-            break;
-          }
           case "linkedin-monitor": {
             if (isLinkedInConfigured()) {
               const analytics = await getLinkedInPageAnalytics();
-              console.log(`  📊 LinkedIn analytics — followers: ${analytics.followers}, engagement: ${analytics.engagement}, impressions: ${analytics.impressions}`);
-              if (analytics.engagement > 0) {
-                result = await chatWithQuinn(graph, `LinkedIn daily performance check. Today's analytics: ${JSON.stringify(analytics)}. Ask Beacon to log this as an analytics snapshot. If engagement is low, suggest content strategy adjustments.`, undefined, onStep) as unknown as Record<string, unknown>;
-              }
+              console.log(`  📊 Dermaqea LinkedIn analytics — followers: ${analytics.followers}, engagement: ${analytics.engagement}, impressions: ${analytics.impressions}`);
+              result = await chatWithQuinn(graph, `LinkedIn performance check for Dermaqea. Today's analytics: ${JSON.stringify(analytics)}. Ask Beacon to log this as an analytics snapshot. Review what's working and suggest content strategy adjustments for better Dermaqea engagement.`, undefined, onStep) as unknown as Record<string, unknown>;
             } else {
               console.log("  ⏭️ LinkedIn not configured — skipping monitoring");
             }
             break;
           }
+          case "linkedin-evening-monitor": {
+            if (isLinkedInConfigured()) {
+              const analytics = await getLinkedInPageAnalytics();
+              console.log(`  📊 Dermaqea LinkedIn evening analytics — followers: ${analytics.followers}, engagement: ${analytics.engagement}, impressions: ${analytics.impressions}`);
+              const alertLevel = analytics.engagement > 50 ? "great" : analytics.engagement > 10 ? "moderate" : "low";
+              result = await chatWithQuinn(graph, `Evening LinkedIn performance check for Dermaqea. Today's analytics: ${JSON.stringify(analytics)}. Engagement is ${alertLevel}. Ask Beacon to log this as an analytics snapshot. Summarize the day's LinkedIn performance for Dermaqea.`, undefined, onStep) as unknown as Record<string, unknown>;
+            } else {
+              console.log("  ⏭️ LinkedIn not configured — skipping evening monitor");
+            }
+            break;
+          }
           case "follow-up-check":
-            result = await chatWithQuinn(graph, "Run a follow-up check. Ask Iris to review all relationships for overdue follow-ups, expiring opportunities, and CRM items needing attention today.", undefined, onStep) as unknown as Record<string, unknown>;
+            result = await chatWithQuinn(graph, "Daily relationship check. Ask Iris to review all relationships once — only flag things that need immediate attention today. Skip routine overdue reminders.", undefined, onStep) as unknown as Record<string, unknown>;
             break;
           case "opportunity-sweep":
             result = await runAtlasAutonomous() as unknown as Record<string, unknown>;
+            if (result) {
+              await runHelixAutonomous("Review the opportunities Atlas just found and stored in memory. Draft proposals or applications for the top 2-3 time-sensitive opportunities. Submit drafts for approval via create_approval.");
+            }
             break;
-          case "proposal-drafting":
-            result = await runHelixAutonomous() as unknown as Record<string, unknown>;
+          case "opportunity-sweep-afternoon":
+            result = await runAtlasAutonomous("Afternoon opportunity sweep. Search for any new grant deadlines, conference application windows, or accelerator intakes that opened today. For every time-sensitive opportunity, create an approval request via create_approval with full details.") as unknown as Record<string, unknown>;
+            if (result) {
+              await runHelixAutonomous("Review the afternoon opportunities Atlas just found. Draft proposals or applications for the top time-sensitive ones. Submit drafts for approval.");
+            }
             break;
           case "weekly-report":
             result = await runWeeklyReport(graph, undefined, onStep) as unknown as Record<string, unknown>;

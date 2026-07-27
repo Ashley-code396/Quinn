@@ -177,7 +177,7 @@ async function runAgentAutonomous(
 export async function runNovaAutonomous(task?: string): Promise<Record<string, unknown>> {
   const result = await runAgentAutonomous(
     novaNode,
-    task ?? "It's a new day. Review the content calendar for gaps, search the web for trending skincare/beauty topics that match our pillars, then generate a LinkedIn post. Create the content item and submit it for approval via create_approval. Work autonomously — do not ask for permission, just create and submit.",
+    task ?? "It's a new day. Review the content calendar for gaps, search the web for trending skincare/beauty topics that match our pillars, then generate a LinkedIn post. Generate a matching image using generate_image. Publish directly with create_linkedin_post (include the image). Create the content item and submit for approval via create_approval. Work autonomously — do not ask for permission, just create and submit.",
     "content-generation",
   );
   await pushApprovalsToTelegram();

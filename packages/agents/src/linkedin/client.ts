@@ -17,6 +17,62 @@ type LinkedInPostResponse = {
   urn: string;
 };
 
+async function uploadImage(
+  token: string,
+  author: string,
+  imageUrl: string,
+): Promise<string> {
+  const initRes = await fetch(`${LINKEDIN_API_BASE}/images?action=initializeUpload`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "LinkedIn-Version": "202501",
+      "X-Restli-Protocol-Version": "2.0.0",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      initializeUploadRequest: {
+        owner: author,
+      },
+    }),
+  });
+
+  if (!initRes.ok) {
+    const errBody = await initRes.text();
+    throw new Error(`LinkedIn image upload init error ${initRes.status}: ${errBody}`);
+  }
+
+  const initData = (await initRes.json()) as {
+    value?: { uploadUrlExpiresAt?: number; uploadUrl?: string; image?: string };
+  };
+  const uploadUrl = initData?.value?.uploadUrl;
+  const imageId = initData?.value?.image;
+  if (!uploadUrl || !imageId) {
+    throw new Error("LinkedIn image upload init failed: no upload URL or image ID returned");
+  }
+
+  const imgRes = await fetch(imageUrl);
+  if (!imgRes.ok) {
+    throw new Error(`Failed to fetch image from ${imageUrl}: ${imgRes.status}`);
+  }
+  const imgBuffer = await imgRes.arrayBuffer();
+
+  const uploadRes = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: imgBuffer,
+  });
+
+  if (!uploadRes.ok) {
+    const errBody = await uploadRes.text();
+    throw new Error(`LinkedIn image upload error ${uploadRes.status}: ${errBody}`);
+  }
+
+  return imageId;
+}
+
 export async function createLinkedInPost(
   text: string,
   options?: {
@@ -46,6 +102,20 @@ export async function createLinkedInPost(
     },
   };
 
+  const media: Array<Record<string, unknown>> = [];
+
+  if (options?.imageUrl) {
+    try {
+      const imageId = await uploadImage(token, author, options.imageUrl);
+      media.push({
+        id: imageId,
+        mediaCategory: "IMAGE",
+      });
+    } catch (err) {
+      console.warn(`Failed to upload image for LinkedIn post: ${(err as Error).message}`);
+    }
+  }
+
   if (options?.articleUrl) {
     body.content = {
       article: {
@@ -54,6 +124,10 @@ export async function createLinkedInPost(
         description: options.articleDescription ?? "",
       },
     };
+  }
+
+  if (media.length > 0) {
+    body.media = media;
   }
 
   const res = await fetch(`${LINKEDIN_API_BASE}/posts`, {

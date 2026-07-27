@@ -446,6 +446,31 @@ export const logAgentActionTool = tool(
 );
 
 /**
+ * Create an analytics snapshot.
+ */
+export const createAnalyticsSnapshotTool = tool(
+  async ({ period, metrics, insights }) => {
+    const snapshot = await prisma.analyticsSnapshot.create({
+      data: {
+        period,
+        metrics,
+        insights: insights ?? null,
+      },
+    });
+    return JSON.stringify(snapshot, null, 2);
+  },
+  {
+    name: "create_analytics_snapshot",
+    description: "Record an analytics snapshot with metrics and insights. Use for tracking LinkedIn performance, website traffic, content engagement, or any KPI over time.",
+    schema: z.object({
+      period: z.string().describe("'daily', 'weekly', or 'monthly'"),
+      metrics: z.any().describe("JSON object of metrics like { linkedinFollowers, engagement, impressions, clicks, contentViews }"),
+      insights: z.string().optional().describe("Optional analysis or observations about this snapshot"),
+    }),
+  },
+);
+
+/**
  * Get analytics snapshots.
  */
 export const getAnalyticsSnapshotsTool = tool(
