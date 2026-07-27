@@ -280,7 +280,7 @@ app.post("/api/quinn/chat", async (req, res) => {
 // ---- Workflow Triggers ----
 app.post("/api/quinn/trigger/:workflow", async (req, res) => {
   const { workflow } = req.params;
-  const validWorkflows = ["daily-briefing", "weekly-priorities", "weekly-report", "quarterly-planning"];
+  const validWorkflows = ["daily-briefing", "content-generation", "research-sweep", "analytics-snapshot", "weekly-priorities", "weekly-report", "quarterly-planning"];
   if (!validWorkflows.includes(workflow)) {
     return res.status(400).json({ error: `Invalid workflow. Valid: ${validWorkflows.join(", ")}` });
   }
