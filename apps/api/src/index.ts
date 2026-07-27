@@ -299,7 +299,7 @@ app.post("/api/quinn/trigger/:workflow", async (req, res) => {
 app.post("/api/quinn/content/generate", async (_req, res) => {
   try {
     const graph = await buildQuinnGraph();
-    const result = await runNovaAutonomous("Generate a LinkedIn post for today about Dermaqea's mission, a counterfeit awareness tip, or an industry insight. Generate a matching image using generate_image. Publish directly with create_linkedin_post (include the image). Create the content item and submit for approval via create_approval.");
+    const result = await runNovaAutonomous("Generate a LinkedIn post for today about Dermaqea's mission, a counterfeit awareness tip, or an industry insight. Generate a matching image using generate_image. Create the content item and submit everything for approval via create_approval — never publish directly.");
     await pushApprovalsToTelegram();
     res.json({ success: true, message: "Content generation complete" });
   } catch (err) {

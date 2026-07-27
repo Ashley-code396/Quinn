@@ -202,7 +202,7 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
   const WORKFLOWS: Record<string, (g: QuinnGraph) => Promise<unknown>> = {
     "research-sweep": (g) => chatWithQuinn(g, "Run a research sweep. Ask Sage to search for new industry developments, competitor news, and emerging opportunities."),
     "analytics-snapshot": (g) => chatWithQuinn(g, "Run the analytics snapshot. Ask Beacon to review all KPIs, check quarterly goal progress, and flag any anomalies or metrics behind target."),
-    "content-generation": (g) => chatWithQuinn(g, "Run morning content generation. Ask Nova to review the content calendar, generate a LinkedIn post for today with a matching image (use generate_image), publish with create_linkedin_post, generate any content due soon, and create draft content for the rest of this week. Submit all content for approval."),
+    "content-generation": (g) => chatWithQuinn(g, "Run morning content generation. Ask Nova to review the content calendar, generate a LinkedIn post for today with a matching image (use generate_image), generate any content due soon, and create draft content for the rest of this week. Submit all content for approval — never publish directly."),
     "daily-briefing": (g) => runDailyBriefing(g),
     "follow-up-check": (g) => chatWithQuinn(g, "Run a follow-up check. Ask Iris to review all relationships for overdue follow-ups, expiring opportunities, and CRM items needing attention today."),
     "weekly-priorities": (g) => runWeeklyPriorities(g),

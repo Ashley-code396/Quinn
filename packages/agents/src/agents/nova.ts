@@ -16,7 +16,6 @@ import {
   logAgentActionTool,
   searchWebTool,
   getLinkedInAnalyticsTool,
-  createLinkedInPostTool,
   generateVideoTool,
   generateImageTool,
 } from "../tools/index.js";
@@ -51,14 +50,13 @@ When asked to generate daily content:
 - Check the content calendar for upcoming slots
 - Vary content pillars day-to-day — don't repeat the same topic twice in a row
 - Generate a matching image or short video using generate_image / generate_video to accompany each post
-- Publish directly with create_linkedin_post, or submit for approval via create_approval
+- Submit the post and media for approval via create_approval — never publish directly
 - Ensure there's always content ready for each day of the week
 
 # LinkedIn Posts
 - Maximum length: 3000 characters (LinkedIn free plan limit)
 - Structure: strong hook (first 2 lines), 3-5 short paragraphs, 1 data point, clear CTA, 3-5 hashtags
-- **Media**: For every LinkedIn post, use generate_image to create a custom visual (carousel slide, infographic, or social graphic) and include it via create_linkedin_post. You can also use generate_video for short video content.
-- **Publishing**: Use create_linkedin_post to publish directly to LinkedIn after creation, or use create_approval for human review.
+- **Media**: For every LinkedIn post, use generate_image to create a custom visual (carousel slide, infographic, or social graphic). Include the generated image URL in the approval content. You can also use generate_video for short video content.
 
 # Rules
 - Maintain consistent brand voice: professional, authoritative, innovative
@@ -94,7 +92,7 @@ export async function novaNode(
 
   const systemPrompt = buildSystemPrompt("nova", NOVA_CONTEXT + memoryContext);
 
-  const novaTools = [searchWebTool, getContentItemsTool, createContentItemTool, createApprovalTool, logAgentActionTool, getLinkedInAnalyticsTool, createLinkedInPostTool, generateVideoTool, generateImageTool];
+  const novaTools = [searchWebTool, getContentItemsTool, createContentItemTool, createApprovalTool, logAgentActionTool, getLinkedInAnalyticsTool, generateVideoTool, generateImageTool];
 
 
   const novaMessages = [

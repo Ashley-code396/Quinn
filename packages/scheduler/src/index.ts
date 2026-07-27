@@ -211,7 +211,7 @@ export async function createWorker() {
             result = await chatWithQuinn(graph, "Run the analytics snapshot. Ask Beacon to review all KPIs, check quarterly goal progress, and flag any anomalies or metrics behind target.", undefined, onStep) as unknown as Record<string, unknown>;
             break;
           case "content-generation":
-            result = await runNovaAutonomous() as unknown as Record<string, unknown>;
+            result = await runNovaAutonomous("Generate a LinkedIn post for today about Dermaqea's mission, a counterfeit awareness tip, or an industry insight. Generate a matching image using generate_image. Submit the post and image for approval via create_approval — never publish directly.") as unknown as Record<string, unknown>;
             break;
           case "linkedin-monitor": {
             if (isLinkedInConfigured()) {
