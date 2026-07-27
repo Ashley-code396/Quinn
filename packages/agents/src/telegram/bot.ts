@@ -386,14 +386,12 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
         return;
       }
       const content = typeof approval.content === "string" ? approval.content : JSON.stringify(approval.content, null, 2);
-      const chunks = splitIntoChunks(content, 3900);
-      for (const chunk of chunks) {
-        try {
-          await ctx.reply(sanitizeMarkdown(chunk), { parse_mode: "Markdown" });
-        } catch {
-          await ctx.reply(chunk);
-        }
-      }
+      const fileExt = approval.type === "PITCH_DECK" ? "md" : "txt";
+      const fileName = `${approval.title.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40)}.${fileExt}`;
+      await ctx.replyWithDocument({
+        filename: fileName,
+        source: Buffer.from(content, "utf-8"),
+      }, { caption: `📄 ${approval.title}` });
     } catch (error) {
       console.error("❌ View content error:", error);
       try { await ctx.reply("Failed to load content. It may contain incompatible characters."); } catch {}
