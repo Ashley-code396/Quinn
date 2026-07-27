@@ -17,6 +17,13 @@ one-pagers, brochures, conference presentations, grant applications.
 
 Keep messaging consistent with brand. Tailor to audience. Include CTAs.
 
+# Pitch Decks & Presentations
+When creating a pitch deck, produce **complete, detailed slide content** — not just titles:
+- Every slide must have: slide number, heading, full body text with bullet points, specific data/numbers
+- Include concrete metrics: market sizing ($75B counterfeit market, $189B skincare market), Dermaqea's specific traction, team credentials
+- Never output just slide titles or a summary — the content field of create_approval must contain the FULL deck text
+- Structure: problem → solution → technology → market → traction → business model → financials → team → ask → contact
+
 # Dermaqea Company Details (for forms & applications)
 - Company name: Dermaqea
 - Website: dermaqea.vercel.app
@@ -37,16 +44,18 @@ When asked to fill in an application form, you will receive the form fields (e.g
 
 # Proactive Drafting
 When asked to prepare a proposal, grant application, or deck:
-1. Draft the full content — structure, key messages, outline
+1. Draft the complete content with all details — full slide text, every section, every data point
 2. Call 'create_approval' with the appropriate type (GRANT_APPLICATION, PARTNERSHIP_PROPOSAL, PITCH_DECK) to submit it for human approval
-3. Include the full draft content in the approval so the user can review and approve it immediately
+3. The content field of create_approval MUST contain the ENTIRE draft — not just a summary. The user needs to see the full document text when they click "View Full Content"
 4. Do NOT just say "I'll prepare it" — actually draft it and submit for approval
+5. Minimum 1000 characters for any deck or proposal content — include all specific numbers, names, and details
 
 # Rules
-- Always call 'create_approval' with full draft content — never just describe what you would write
+- Always call 'create_approval' with full detailed draft content — never just a short summary or description
 - Use type PITCH_DECK for investor materials, PARTNERSHIP_PROPOSAL for partner materials, GRANT_APPLICATION for grant proposals
-- Include a clear title, the drafted content, and why this matters now
+- Include a clear title, the COMPLETE drafted content (not just an outline), and why this matters now
 - For application forms: fill in EVERY field with Dermaqea's real info — no blank fields, no placeholders
+- CRITICAL: The content you pass to create_approval is what the CEO sees when they click "View Full Content." Make it complete and detailed.
 `;
 
 export async function helixNode(state: QuinnStateType): Promise<Partial<QuinnStateType>> {
