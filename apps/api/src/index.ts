@@ -25,7 +25,7 @@ import cors from "cors";
 import { createServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { prisma } from "@quinn/database";
-import { buildQuinnGraph, chatWithQuinn, createTelegramBot, pushApprovalsToTelegram } from "@quinn/agents";
+import { buildQuinnGraph, chatWithQuinn, runNovaAutonomous, createTelegramBot, pushApprovalsToTelegram } from "@quinn/agents";
 import type { QuinnGraph } from "@quinn/agents";
 import { createScheduler, createWorker, triggerWorkflow } from "@quinn/scheduler";
 import type { Queue } from "bullmq";
@@ -284,11 +284,28 @@ app.post("/api/quinn/trigger/:workflow", async (req, res) => {
   if (!validWorkflows.includes(workflow)) {
     return res.status(400).json({ error: `Invalid workflow. Valid: ${validWorkflows.join(", ")}` });
   }
-  const jobId = await triggerWorkflow(schedulerQueue, workflow);
-  cacheInvalidate("*").catch(() => {});
-  broadcast("workflow:started", { workflow, jobId });
-  pushApprovalsToTelegram().catch(() => {});
-  res.json({ jobId, workflow, status: "queued" });
+  try {
+    const jobId = await triggerWorkflow(schedulerQueue, workflow);
+    cacheInvalidate("*").catch(() => {});
+    broadcast("workflow:started", { workflow, jobId });
+    pushApprovalsToTelegram().catch(() => {});
+    res.json({ jobId, workflow, status: "queued" });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/** Inline content generation — runs Nova directly without a queue worker. */
+app.post("/api/quinn/content/generate", async (_req, res) => {
+  try {
+    const graph = await buildQuinnGraph();
+    const result = await runNovaAutonomous("Generate a LinkedIn post for today about Dermaqea's mission, a counterfeit awareness tip, or an industry insight. Generate a matching image using generate_image. Publish directly with create_linkedin_post (include the image). Create the content item and submit for approval via create_approval.");
+    await pushApprovalsToTelegram();
+    res.json({ success: true, message: "Content generation complete" });
+  } catch (err) {
+    console.error("Content generation error:", err);
+    res.status(500).json({ error: (err as Error).message });
+  }
 });
 
 // ---- Agent Logs ----
