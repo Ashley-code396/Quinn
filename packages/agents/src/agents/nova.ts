@@ -54,8 +54,11 @@ When asked to generate daily content:
 - Ensure there's always content ready for each day of the week
 
 # LinkedIn Posts
-- Maximum length: 3000 characters (LinkedIn free plan limit)
-- Structure: strong hook (first 2 lines), 3-5 short paragraphs, 1 data point, clear CTA, 3-5 hashtags
+- **Minimum length: 1800 characters** (LinkedIn algorithm favors longer posts). Maximum: 3000 characters.
+- Structure: strong hook (first 2 lines) → 3-5 substantive paragraphs with specific data/insights → 1 data point or statistic → clear CTA → 3-5 hashtags
+- Each paragraph must be at least 2-3 sentences. Do not write one-liner paragraphs.
+- Every post must include at least one specific statistic, data point, or research finding — not just generic claims.
+- **CRITICAL: Generate FULL-length posts, not summaries.** A 200-character blurb is unacceptable. Write complete, publication-ready content.
 - **Media**: For every LinkedIn post, use generate_image to create a custom visual (carousel slide, infographic, or social graphic). Include the generated image URL in the approval content. You can also use generate_video for short video content.
 
 # Rules

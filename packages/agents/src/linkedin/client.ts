@@ -26,7 +26,7 @@ async function uploadImage(
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
-      "LinkedIn-Version": "202501",
+      "LinkedIn-Version": "202607",
       "X-Restli-Protocol-Version": "2.0.0",
       "Content-Type": "application/json",
     },
@@ -134,7 +134,7 @@ export async function createLinkedInPost(
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
-      "LinkedIn-Version": "202501",
+      "LinkedIn-Version": "202607",
       "X-Restli-Protocol-Version": "2.0.0",
       "Content-Type": "application/json",
     },
@@ -173,7 +173,7 @@ export async function getLinkedInPostAnalytics(
   const res = await fetch(`${LINKEDIN_API_BASE}/posts?${params}`, {
     headers: {
       Authorization: `Bearer ${token}`,
-      "LinkedIn-Version": "202501",
+      "LinkedIn-Version": "202607",
       "X-Restli-Protocol-Version": "2.0.0",
     },
   });
@@ -220,7 +220,7 @@ export async function getLinkedInPageAnalytics(): Promise<{
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
-      "LinkedIn-Version": "202501",
+      "LinkedIn-Version": "202607",
       "X-Restli-Protocol-Version": "2.0.0",
       "Content-Type": "application/json",
     },

@@ -71,7 +71,7 @@ export async function pushApprovalsToTelegram(): Promise<void> {
   const pending = await prisma.approval.findMany({
     where: { status: "PENDING" },
     orderBy: { createdAt: "asc" },
-    take: 5,
+    take: 20,
   });
 
   for (const approval of pending) {
@@ -110,6 +110,24 @@ export async function pushApprovalsToTelegram(): Promise<void> {
       });
     } catch (err) {
       console.error("Failed to push approval to Telegram:", (err as Error).message);
+      // Retry as plain text if markdown failed
+      try {
+        await bot.telegram.sendMessage(chatId, message.replace(/[*_`~\[\]()]/g, ""), {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: "✅ Approve", callback_data: `approve:${approval.id}` },
+                { text: "❌ Reject", callback_data: `reject:${approval.id}` },
+              ],
+              [
+                { text: "📄 View Full Content", callback_data: `view:${approval.id}` },
+              ],
+            ],
+          },
+        });
+      } catch (fallbackErr) {
+        console.error("Failed to push approval even as plain text:", (fallbackErr as Error).message);
+      }
     }
   }
 }
