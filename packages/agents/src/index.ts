@@ -10,3 +10,4 @@ export { createModel, withFallback, getCurrentProvider } from "./llm.js";
 export type { ModelConfig, LLMProvider } from "./llm.js";
 export { executeApprovedAction } from "./executor/index.js";
 export { isLinkedInConfigured, createLinkedInPost, getLinkedInPageAnalytics } from "./linkedin/index.js";
+export { getTodaysSummary, formatSummary } from "./telegram/summary.js";

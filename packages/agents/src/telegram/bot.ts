@@ -7,6 +7,7 @@ import type { AgentReport, Recommendation, Alert } from "@quinn/shared";
 import { chatWithQuinn, runDailyBriefing, runWeeklyReport, runWeeklyPriorities, runQuarterlyPlanning } from "../workflows/index.js";
 import { isRedisMemoryConfigured, storeSessionEvent } from "../memory/index.js";
 import { executeApprovedAction } from "../executor/index.js";
+import { getTodaysSummary, formatSummary } from "./summary.js";
 
 let botInstance: Telegraf | null = null;
 let authorizedChatId: string | null = null;
@@ -294,9 +295,21 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
     }
   }
 
+  bot.command("today", async (ctx) => {
+    if (ctx.chat?.id) authorizedChatId = String(ctx.chat.id);
+    const summary = await getTodaysSummary();
+    const formatted = formatSummary(summary);
+    try {
+      await ctx.reply(sanitizeMarkdown(formatted), { parse_mode: "Markdown" });
+    } catch {
+      await ctx.reply(formatted.replace(/[*_`~\[\]]/g, ""));
+    }
+  });
+
   bot.command("start", async (ctx) => {
     await ctx.reply(
-      "I'm Quinn, your AI CMO. Send me a message or use /trigger <workflow> to run a scheduled workflow on demand.\n\nWorkflows:\n" +
+      "I'm Quinn, your AI CMO. I research, create content, send outreach, and register for events.\n\n" +
+      "Commands:\n  /today — See what I did today\n  /trigger <workflow> — Run a workflow now\n\nWorkflows:\n" +
       Object.keys(WORKFLOWS).map((w) => `  /trigger ${w}`).join("\n")
     );
   });

@@ -6,7 +6,7 @@ import { createModel, withFallback } from "../llm.js";
 import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import type { QuinnStateType } from "../state.js";
 import { buildSystemPrompt } from "../prompts/system.js";
-import { createApprovalTool, logAgentActionTool } from "../tools/index.js";
+import { createApprovalTool, logAgentActionTool, generatePdfTool, generateSlidesTool, submitWebFormTool, registerForEventTool } from "../tools/index.js";
 import { searchMemories, storeMemory } from "../memory/index.js";
 import { lastMessageType } from "../messages.js";
 
@@ -15,14 +15,44 @@ const HELIX_CONTEXT = `
 Generate: pitch decks, investor decks, sales decks, partnership proposals,
 one-pagers, brochures, conference presentations, grant applications.
 
+**Generate actual files — not just text.** Use generate_pdf for documents and
+generate_slides for presentations. Always submit the generated file for approval
+via create_approval with the file path included in the content.
+
 Keep messaging consistent with brand. Tailor to audience. Include CTAs.
 
 # Pitch Decks & Presentations
-When creating a pitch deck, produce **complete, detailed slide content** — not just titles:
-- Every slide must have: slide number, heading, full body text with bullet points, specific data/numbers
-- Include concrete metrics: market sizing ($75B counterfeit market, $189B skincare market), Dermaqea's specific traction, team credentials
-- Never output just slide titles or a summary — the content field of create_approval must contain the FULL deck text
-- Structure: problem → solution → technology → market → traction → business model → financials → team → ask → contact
+When creating a pitch deck:
+1. Use generate_slides to create the actual .pptx file with full slide content
+2. Every slide must have: heading, full body text with bullet points, specific data/numbers
+3. Include concrete metrics: market sizing ($75B counterfeit market, $189B skincare market), Dermaqea's specific traction, team credentials
+4. Structure: problem → solution → technology → market → traction → business model → financials → team → ask → contact
+5. After generating the file, call create_approval with type PITCH_DECK containing the file path and full slide content for review
+
+# One-Pagers, Brochures & Whitepapers
+When creating a document:
+1. Use generate_pdf to create the actual .pdf file with structured content
+2. Structure: title, key points, supporting data, CTA
+3. After generating the file, call create_approval with the appropriate type containing the file path
+
+# Proactive Asset Generation
+When the system identifies an opportunity (partnership, grant, conference):
+1. Immediately generate the relevant asset (PDF or slides) using generate_pdf or generate_slides
+2. Submit for approval via create_approval with the file path included
+3. Do not wait to be asked — if there's a pending opportunity, prepare materials proactively
+
+# Conference & Event Registration
+When asked to register for a conference or event:
+1. Use register_for_event tool — it has Dermaqea's default info baked in (name, email, company)
+2. Pass the event URL from the opportunity Atlas found
+3. If the registration form has extra fields not covered by defaults, use additionalFields parameter
+4. After registration, submit for approval via create_approval with type CONFERENCE_REGISTRATION including the event name and confirmation details
+
+# Web Form Filling
+For any web-based form (grant applications, newsletter signups, partner portals):
+1. Use submit_web_form with the page URL and field mappings
+2. Map form field labels/names to Dermaqea's info
+3. Submit for approval after successful fill so the user can review
 
 # Dermaqea Company Details (for forms & applications)
 - Company name: Dermaqea
@@ -67,7 +97,7 @@ export async function helixNode(state: QuinnStateType): Promise<Partial<QuinnSta
     ? `\n# Relevant Knowledge & Previous Materials\n${memories.map((m) => `[${m.category}] ${m.content}`).join("\n")}`
     : "";
 
-  const helixTools = [createApprovalTool, logAgentActionTool];
+  const helixTools = [createApprovalTool, logAgentActionTool, generatePdfTool, generateSlidesTool, submitWebFormTool, registerForEventTool];
 
   const helixMessages = [
     new SystemMessage(buildSystemPrompt("helix", HELIX_CONTEXT + memCtx)),

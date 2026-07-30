@@ -143,6 +143,13 @@ export async function createLinkedInPost(
 
   if (!res.ok) {
     const errBody = await res.text();
+    if (res.status === 400 && errBody.includes("Organization Or Events permissions")) {
+      throw new Error(
+        "LinkedIn API error 400: The access token lacks 'w_organization_social' scope. " +
+        "Generate a new token with this scope in the LinkedIn Developer Portal (https://developer.linkedin.com). " +
+        "See .env.example for details.",
+      );
+    }
     throw new Error(`LinkedIn API error ${res.status}: ${errBody}`);
   }
 

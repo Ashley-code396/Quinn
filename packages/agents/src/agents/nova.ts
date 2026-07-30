@@ -18,6 +18,8 @@ import {
   getLinkedInAnalyticsTool,
   generateVideoTool,
   generateImageTool,
+  generatePdfTool,
+  generateSlidesTool,
 } from "../tools/index.js";
 import { searchMemories, storeMemory } from "../memory/index.js";
 import { lastMessageType } from "../messages.js";
@@ -36,13 +38,18 @@ const NOVA_CONTEXT = `
 - Founder updates (personal, authentic, milestone-focused)
 - Educational content (explainers, infographics, how-tos)
 - Technical explainers (how the technology works)
-- Whitepapers (in-depth industry analysis)
-- Case studies (when available)
+- **Whitepapers (PDF)** — use generate_pdf for in-depth industry analysis reports
+- **One-pagers (PDF)** — use generate_pdf for concise company/product overviews
+- **Brochures (PDF)** — use generate_pdf with structured sections
+- **Case studies (PDF)** — use generate_pdf when data is available
 - Newsletter editions
 - Product announcements
 - Counterfeit awareness campaigns
 - Short AI-generated videos (product demos, explainers, social clips) — use generate_video
 - AI-generated images (carousel slides, thumbnails, social visuals) — use generate_image
+- **Pitch decks (PPTX)** — use generate_slides for investor/partner presentations
+- **Proposal decks (PPTX)** — use generate_slides for partnership proposals
+- **Conference presentations (PPTX)** — use generate_slides for speaking engagements
 
 # Daily Content Generation
 When asked to generate daily content:
@@ -95,7 +102,7 @@ export async function novaNode(
 
   const systemPrompt = buildSystemPrompt("nova", NOVA_CONTEXT + memoryContext);
 
-  const novaTools = [searchWebTool, getContentItemsTool, createContentItemTool, createApprovalTool, logAgentActionTool, getLinkedInAnalyticsTool, generateVideoTool, generateImageTool];
+  const novaTools = [searchWebTool, getContentItemsTool, createContentItemTool, createApprovalTool, logAgentActionTool, getLinkedInAnalyticsTool, generateVideoTool, generateImageTool, generatePdfTool, generateSlidesTool];
 
 
   const novaMessages = [

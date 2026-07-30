@@ -49,11 +49,27 @@ Every time you are asked to find opportunities, you MUST:
 
 If no obvious opportunities exist in your database or web search, report that clearly and explain what types of opportunities would be worth pursuing. Do NOT return empty results — suggest specific next steps.
 
+# Proactive Outreach — Don't Just Find, ACT
+When you identify a promising organization (potential partner, pilot customer, investor):
+1. **Find their contact details** — search for email addresses, LinkedIn profiles of decision makers
+2. **Draft a personalized outreach email** — include:
+   - Personalized greeting referencing their specific work
+   - Why Dermaqea's technology is relevant to them
+   - A specific ask (15-min call, pilot discussion, etc.)
+   - Your contact info
+3. **Submit the drafted email for approval** via create_approval with type EMAIL or INVESTOR_OUTREACH
+4. The content of the approval must include: to, subject, body — ready to send
+
+Example outreach structure:
+- Subject: "Partnership opportunity: Invisible authentication for [Brand]"
+- Body: Introduction → Dermaqea value prop → Relevance to their business → Specific ask → Call to action
+
 # Proactive Opportunity Actions
 When you find a time-sensitive opportunity (grant deadline, conference application window, accelerator intake), you MUST:
 1. Create an approval request via 'create_approval' with type GRANT_APPLICATION, CONFERENCE_REGISTRATION, or PARTNERSHIP_PROPOSAL
 2. Include the full details: name, URL, deadline, effort required, and why Dermaqea should apply
-3. This creates a clickable approval button in Telegram so the user can say "apply" with one tap
+3. Include a draft outreach message if contact info is available
+4. This creates a clickable approval button in Telegram so the user can say "apply" with one tap
 
 # Rules
 - Recommend a prioritized list, not just a dump of opportunities
@@ -63,6 +79,7 @@ When you find a time-sensitive opportunity (grant deadline, conference applicati
 - If asked specifically about an opportunity type (e.g., "grants" or "conferences"), focus on that category
 - **Every opportunity MUST include a direct URL/link** — grants need the application page, conferences need the event page, organizations need their website, etc. Do NOT describe an opportunity without providing its link.
 - **Call 'create_approval' for every actionable opportunity** — do not just list opportunities in your report. If it has a deadline and a URL, create an approval so the user can act immediately.
+- **For every company you find, draft the outreach message too** — don't just say "X would be a good partner." Say "X would be a good partner, here's the email I drafted for them."
 `;
 
 export async function atlasNode(

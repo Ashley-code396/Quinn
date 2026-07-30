@@ -1,7 +1,7 @@
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 
-const RUNWAY_API = "https://api.runwayml.com/v1";
+const RUNWAY_API = "https://api.dev.runwayml.com/v1";
 
 export const generateVideoTool = tool(
   async ({ prompt, aspectRatio, duration }) => {

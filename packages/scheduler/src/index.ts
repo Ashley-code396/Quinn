@@ -21,11 +21,26 @@ import {
   getLinkedInPageAnalytics,
   pushApprovalsToTelegram,
   pushFindingsToTelegram,
+  getTodaysSummary,
+  formatSummary,
 } from "@quinn/agents";
 import type { QuinnGraph } from "@quinn/agents";
 import type { AgentReport } from "@quinn/shared";
 
 const QUEUE_NAME = "quinn-scheduler";
+
+async function sendTelegramMessage(text: string): Promise<void> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "Markdown" }),
+    });
+  } catch {}
+}
 
 // Dedicated Redis connection for BullMQ — uses its own connection
 // so blocking commands (bzpopmin) don't interfere with the shared cache client.
@@ -126,6 +141,13 @@ export async function createScheduler() {
     { name: "linkedin-evening-monitor", data: { workflow: "linkedin-evening-monitor" } },
   );
 
+  // End-of-day summary — every day at 7:00 PM
+  await queue.upsertJobScheduler(
+    "daily-summary",
+    { pattern: "0 19 * * *" },
+    { name: "daily-summary", data: { workflow: "daily-summary" } },
+  );
+
   // Weekly priorities — Monday at 9:00 AM
   await queue.upsertJobScheduler(
     "weekly-priorities",
@@ -157,8 +179,9 @@ export async function createScheduler() {
   console.log("   • Opportunity sweep (AM):      0 11 * * *   (Atlas + Helix)");
   console.log("   • Research sweep (PM):         0 14 * * *");
   console.log("   • Opportunity sweep (PM):      0 15 * * *   (Atlas + Helix)");
-  console.log("   • LinkedIn monitor (PM):       0 18 * * *");
-  console.log("   • Weekly priorities:           0 9 * * 1");
+   console.log("   • LinkedIn monitor (PM):       0 18 * * *");
+   console.log("   • Daily summary:                0 19 * * *   (what I did today)");
+   console.log("   • Weekly priorities:           0 9 * * 1");
   console.log("   • Weekly report:               0 17 * * 5");
   console.log("   • Quarterly planning:          0 9 1 1,4,7,10 *");
 
@@ -211,7 +234,7 @@ export async function createWorker() {
             result = await chatWithQuinn(graph, "Run the analytics snapshot. Ask Beacon to review all KPIs, check quarterly goal progress, and flag any anomalies or metrics behind target.", undefined, onStep) as unknown as Record<string, unknown>;
             break;
           case "content-generation":
-            result = await runNovaAutonomous("Generate a LinkedIn post for today about Dermaqea's mission, a counterfeit awareness tip, or an industry insight. Generate a matching image using generate_image. Submit the post and image for approval via create_approval — never publish directly.") as unknown as Record<string, unknown>;
+            result = await runNovaAutonomous("Generate content for today. Options (choose based on what's most valuable right now): (1) A LinkedIn post with matching image, (2) A PDF whitepaper or one-pager on a relevant topic using generate_pdf, (3) A slide deck on an industry topic using generate_slides. Vary the format day-to-day — don't always do the same type. Submit everything for approval via create_approval — never publish directly.") as unknown as Record<string, unknown>;
             break;
           case "linkedin-monitor": {
             if (isLinkedInConfigured()) {
@@ -234,19 +257,26 @@ export async function createWorker() {
             }
             break;
           }
+          case "daily-summary": {
+            const summary = await getTodaysSummary();
+            const formatted = formatSummary(summary);
+            await sendTelegramMessage(formatted);
+            console.log(`  📋 Daily summary pushed — ${summary.findingsCount} actions logged`);
+            break;
+          }
           case "follow-up-check":
             result = await chatWithQuinn(graph, "Daily relationship check. Ask Iris to review all relationships once — only flag things that need immediate attention today. Skip routine overdue reminders.", undefined, onStep) as unknown as Record<string, unknown>;
             break;
           case "opportunity-sweep":
-            result = await runAtlasAutonomous() as unknown as Record<string, unknown>;
+            result = await runAtlasAutonomous("Morning opportunity sweep. Find new prospects, partners, grants, and conferences. For every company you identify, draft a personalized outreach email with subject, body, and their contact info. Create approval requests with type EMAIL for outreach emails, GRANT_APPLICATION for grants, CONFERENCE_REGISTRATION for events. Include full draft content so it's ready to send upon approval. For events/conferences, include the registration URL in the approval so Helix can auto-register.") as unknown as Record<string, unknown>;
             if (result) {
-              await runHelixAutonomous("Review the opportunities Atlas just found and stored in memory. Draft proposals or applications for the top 2-3 time-sensitive opportunities. Submit drafts for approval via create_approval.");
+              await runHelixAutonomous("Review the opportunities Atlas just found. For any CONFERENCE_REGISTRATION opportunities, use register_for_event to actually register Dermaqea for those events. For the top prospect, generate a PDF or slide deck using generate_pdf or generate_slides. Draft outreach emails for the top 2 companies. Submit everything for approval via create_approval.");
             }
             break;
           case "opportunity-sweep-afternoon":
-            result = await runAtlasAutonomous("Afternoon opportunity sweep. Search for any new grant deadlines, conference application windows, or accelerator intakes that opened today. For every time-sensitive opportunity, create an approval request via create_approval with full details.") as unknown as Record<string, unknown>;
+            result = await runAtlasAutonomous("Afternoon opportunity sweep. Search for new grant deadlines, conference windows, and companies. For every organization, draft the outreach email (to, subject, body) and submit for approval. Include registration URLs for any events.") as unknown as Record<string, unknown>;
             if (result) {
-              await runHelixAutonomous("Review the afternoon opportunities Atlas just found. Draft proposals or applications for the top time-sensitive ones. Submit drafts for approval.");
+              await runHelixAutonomous("Review the afternoon opportunities. Register for any events using register_for_event tool. Generate a PDF one-pager for the top prospect using generate_pdf. Draft outreach emails for the top 3 companies. Submit for approval.");
             }
             break;
           case "weekly-report":
