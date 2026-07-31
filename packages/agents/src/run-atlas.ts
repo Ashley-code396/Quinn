@@ -18,7 +18,7 @@ async function main() {
     "Create one approval per brand with the email draft as the content."
   );
   console.log("\n✅ Done. Result:");
-  console.log(typeof result === "string" ? result.slice(0, 3000) : JSON.stringify(result).slice(0, 3000));
+  console.log(JSON.stringify(result).slice(0, 3000));
   process.exit(0);
 }
 main().catch(console.error);
