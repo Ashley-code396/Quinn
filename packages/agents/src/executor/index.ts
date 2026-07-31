@@ -2,6 +2,7 @@ import { prisma } from "@quinn/database";
 import { createLinkedInPost, isLinkedInConfigured } from "../linkedin/index.js";
 import { getResendClient, getFromAddress } from "./email-client.js";
 import { registerForEventTool } from "../tools/forms.js";
+import { generatePdfTool } from "../tools/pdf.js";
 
 export type ExecutionResult = {
   success: boolean;
@@ -97,10 +98,30 @@ async function handleLinkedInPost(approval: any): Promise<ExecutionResult> {
   }
 }
 
+function parseEmailContent(approval: any): any {
+  let content: any = approval.content;
+  if (typeof content === "string") {
+    try {
+      content = JSON.parse(content);
+    } catch {
+      const toMatch = content.match(/^to:\s*(.+)$/im);
+      const subjectMatch = content.match(/^subject:\s*(.+)$/im);
+      const body = content
+        .replace(/^to:\s*.+$/im, "")
+        .replace(/^subject:\s*.+$/im, "")
+        .trim();
+      content = {
+        ...(toMatch ? { to: toMatch[1].trim() } : {}),
+        ...(subjectMatch ? { subject: subjectMatch[1].trim() } : {}),
+        ...(body ? { body } : {}),
+      };
+    }
+  }
+  return content && typeof content === "object" ? content : {};
+}
+
 async function handleEmail(approval: any): Promise<ExecutionResult> {
-  const content = typeof approval.content === "string"
-    ? JSON.parse(approval.content)
-    : approval.content;
+  const content = parseEmailContent(approval);
 
   const to = content.to || content.recipient || content.email;
   const subject = content.subject || approval.title;
@@ -155,7 +176,149 @@ async function handleGrantApplication(approval: any): Promise<ExecutionResult> {
 }
 
 async function handlePartnershipProposal(approval: any): Promise<ExecutionResult> {
-  return markReady(approval, "Partnership proposal approved. Generate a PDF with generate_pdf and send via send_email for delivery.");
+  const content = typeof approval.content === "string"
+    ? (() => { try { return JSON.parse(approval.content); } catch { return { text: approval.content }; } })()
+    : approval.content;
+
+  const companyName = content.company || content.companyName || content.brand || "Potential Partner";
+  const contactEmail = content.to || content.email || content.contactEmail;
+  const contactName = content.contactName || content.name || "there";
+  const proposalTitle = `Partnership Proposal: ${companyName} x Dermaqea`;
+
+  // 1. Generate PDF proposal
+  try {
+    const pdfResult = await generatePdfTool.invoke({
+      title: proposalTitle,
+      content: [
+        `# ${proposalTitle}`,
+        ``,
+        `## Executive Summary`,
+        `Dermaqea proposes a strategic partnership with ${companyName} to eliminate counterfeit skincare products using invisible cryptographic authentication technology.`,
+        ``,
+        `## The Problem`,
+        `- The global counterfeit cosmetics market costs brands $75B annually`,
+        `- 1 in 5 luxury beauty products is counterfeit`,
+        `- Counterfeit products contain toxic ingredients: arsenic, mercury, bacteria`,
+        `- Current authentication methods (QR codes, holograms) are easily replicated`,
+        ``,
+        `## The Solution`,
+        `Dermaqea embeds invisible cryptographic signatures directly into packaging artwork. Consumers verify authenticity with a simple smartphone scan — no app required.`,
+        ``,
+        `## Why Partner with Dermaqea`,
+        `- Zero changes to existing packaging workflow`,
+        `- Invisible mark — no impact on design aesthetics`,
+        `- Instant verification with any smartphone`,
+        `- Real-time analytics on scan locations and frequency`,
+        `- Build consumer trust and brand loyalty`,
+        ``,
+        `## Partnership Model`,
+        `- **Pilot Program**: ${companyName} tests Dermaqea on one product line`,
+        `- **Timeline**: 4-week implementation, 30-day pilot`,
+        `- **Investment**: Free pilot — pay only for results`,
+        `- **Support**: Dedicated integration team, 24/7 support`,
+        ``,
+        `## Expected Outcomes`,
+        `- 100% authentic product guarantee for consumers`,
+        `- Real-time counterfeit detection and alerting`,
+        `- Enhanced brand trust and premium positioning`,
+        `- Consumer engagement through scan analytics`,
+        ``,
+        `## Next Steps`,
+        `1. Schedule a 15-minute discovery call`,
+        `2. Define pilot scope and success metrics`,
+        `3. Technical integration (1-2 weeks)`,
+        `4. Launch pilot and measure results`,
+        ``,
+        `## Contact`,
+        `Ashley Luna, CEO & Founder`,
+        `Dermaqea`,
+        `https://dermaqea.vercel.app`,
+      ].join("\n"),
+      includeTableOfContents: true,
+    });
+
+    await prisma.agentLog.create({
+      data: {
+        agentName: (approval.agentName || "QUINN") as any,
+        action: "proposal_pdf_generated",
+        input: JSON.stringify({ approvalId: approval.id, company: companyName }),
+        output: JSON.stringify({ result: pdfResult.slice(0, 500) }),
+        success: true,
+      },
+    });
+
+    // 2. Send email with proposal if we have a contact
+    if (contactEmail) {
+      const resendClient = getResendClient();
+      if (resendClient) {
+        const emailBody = [
+          `Hi ${contactName},`,
+          ``,
+          `I'm reaching out from Dermaqea about a partnership opportunity I think ${companyName} would find valuable.`,
+          ``,
+          `We've developed invisible cryptographic authentication for skincare packaging — consumers verify authenticity with a smartphone scan, no app needed. It addresses the $75B counterfeit cosmetics crisis head-on.`,
+          ``,
+          `I've attached a partnership proposal with more details. I'd love to schedule a 15-minute call to discuss how this could work for ${companyName}.`,
+          ``,
+          `Would you be open to a quick chat next week?`,
+          ``,
+          `Best,`,
+          `Ashley Luna`,
+          `CEO, Dermaqea`,
+          `https://dermaqea.vercel.app`,
+        ].join("\n");
+
+        const { error } = await resendClient.emails.send({
+          from: `Dermaqea <${getFromAddress()}>`,
+          to: contactEmail,
+          subject: `Partnership opportunity: ${companyName} x Dermaqea`,
+          text: emailBody,
+        });
+
+        if (!error) {
+          await prisma.agentLog.create({
+            data: {
+              agentName: (approval.agentName || "QUINN") as any,
+              action: "proposal_email_sent",
+              input: JSON.stringify({ to: contactEmail, company: companyName }),
+              output: JSON.stringify({ status: "sent" }),
+              success: true,
+            },
+          });
+
+          return {
+            success: true,
+            message: `✅ I generated a partnership proposal PDF for ${companyName} and emailed it to ${contactEmail}.\n\nThe proposal includes: problem, solution, partnership model, and next steps. I'll follow up in a few days if I don't hear back.`,
+          };
+        }
+      }
+
+      return {
+        success: true,
+        message: `✅ I generated a PDF partnership proposal for ${companyName}.\n\nTo send it, I need RESEND_API_KEY configured. The PDF is ready to attach to an email to ${contactEmail}.`,
+      };
+    }
+
+    return {
+      success: true,
+      message: `✅ I generated a partnership proposal PDF for ${companyName}.\n\nI don't have a contact email for them. Check the assets directory for the PDF and send it manually.`,
+    };
+  } catch (error: any) {
+    await prisma.agentLog.create({
+      data: {
+        agentName: (approval.agentName || "QUINN") as any,
+        action: "proposal_generation_failed",
+        input: JSON.stringify({ approvalId: approval.id, company: companyName }),
+        output: JSON.stringify({ error: error.message }),
+        success: false,
+      },
+    });
+
+    return {
+      success: false,
+      message: `❌ I tried to generate a partnership proposal for ${companyName} but hit an error: ${error.message}. I'll flag this for review.`,
+    };
+  }
 }
 
 async function handlePitchDeck(approval: any): Promise<ExecutionResult> {

@@ -357,6 +357,8 @@ const opportunityTypeMap: Record<string, OpportunityType> = {
 };
 
 const opportunityStatusMap: Record<string, OpportunityStatus> = {
+  open: OpportunityStatus.IDENTIFIED,
+  new: OpportunityStatus.IDENTIFIED,
   identified: OpportunityStatus.IDENTIFIED,
   researching: OpportunityStatus.RESEARCHING,
   qualified: OpportunityStatus.QUALIFIED,
@@ -374,7 +376,7 @@ export const getOpportunitiesTool = tool(
     const opportunities = await prisma.opportunity.findMany({
       where: {
         ...(type && { type: opportunityTypeMap[type.toLowerCase()] ?? (type as OpportunityType) }),
-        ...(status && { status: opportunityStatusMap[status.toLowerCase()] ?? (status as OpportunityStatus) }),
+        ...(status && { status: opportunityStatusMap[status.toLowerCase()] ?? OpportunityStatus.IDENTIFIED }),
       },
       include: {
         organization: { select: { name: true, id: true } },

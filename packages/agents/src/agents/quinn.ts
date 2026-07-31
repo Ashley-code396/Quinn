@@ -233,22 +233,38 @@ export async function quinnNode(
 
   const result = await withFallback(
     async (model) => {
-      const structured = model.withStructuredOutput(routingSchema);
-      return await structured.invoke(messagesForModel);
+      try {
+        const structured = model.withStructuredOutput(routingSchema);
+        return await structured.invoke(messagesForModel);
+      } catch {
+        // If structured output fails, synthesize a response directly
+        const fallbackResponse = await model.invoke([
+          ...messagesForModel,
+          new HumanMessage("Provide your analysis and recommendation as plain text."),
+        ]);
+        return {
+          thinking: fallbackResponse.content?.toString() ?? "",
+          nextAgent: "synthesize",
+          messageToAgent: fallbackResponse.content?.toString() ?? "Summarize and provide recommendations.",
+        };
+      }
     },
     { temperature: 0.3 },
   );
 
+  const nextAgent = result?.nextAgent ?? "synthesize";
+  const messageContent = result?.messageToAgent ?? result?.thinking ?? "No analysis generated.";
+
   return {
-    next: result.nextAgent,
+    next: nextAgent,
     messages: [
       new AIMessage({
-        content: result.messageToAgent,
+        content: messageContent,
         name: "quinn",
       }),
     ],
     iterationCount: iterationCount + 1,
-    consultedAgents: [...consultedAgents, result.nextAgent as never],
+    consultedAgents: [...consultedAgents, nextAgent as never],
     ...(isNewUserMessage ? { agentReports, recommendations, alerts } : {}),
   };
 }
