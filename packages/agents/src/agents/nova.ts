@@ -9,6 +9,7 @@ import { createModel, withFallback } from "../llm.js";
 import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import type { QuinnStateType } from "../state.js";
 import { buildSystemPrompt } from "../prompts/system.js";
+import { prisma } from "@quinn/database";
 import {
   getContentItemsTool,
   createContentItemTool,
@@ -138,14 +139,34 @@ export async function novaNode(
 
   if (response.tool_calls?.length) {
     const toolResults: string[] = [];
+    let createdContentItemId: string | null = null;
+    let createdApprovalId: string | null = null;
     for (const tc of response.tool_calls) {
       const tool = novaTools.find(t => t.name === tc.name);
       if (!tool) continue;
       try {
         const result = await (tool as any).invoke(tc.args);
+        if (tc.name === "create_content_item") {
+          try { createdContentItemId = (JSON.parse(result) as { id?: string })?.id ?? null; } catch { /* not JSON */ }
+        } else if (tc.name === "create_approval") {
+          try { createdApprovalId = (JSON.parse(result) as { id?: string })?.id ?? null; } catch { /* not JSON */ }
+        }
         toolResults.push(`${tc.name} returned:\n${typeof result === "string" ? result.slice(0, 2000) : JSON.stringify(result).slice(0, 2000)}`);
       } catch (err) {
         toolResults.push(`${tc.name} failed: ${(err as Error).message}`);
+      }
+    }
+    // Keep content items in sync with their approval: when Nova creates both a
+    // content item and an approval, link them so the executor can advance the
+    // content item's status (IDEA -> APPROVED -> PUBLISHED) on approval.
+    if (createdContentItemId && createdApprovalId) {
+      try {
+        await prisma.approval.update({
+          where: { id: createdApprovalId },
+          data: { contentItemId: createdContentItemId },
+        });
+      } catch (e) {
+        console.warn("Could not link approval to content item:", (e as Error).message);
       }
     }
     const existingContent = response.content?.toString()?.trim() || "Tools executed.";

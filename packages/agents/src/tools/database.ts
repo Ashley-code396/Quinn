@@ -160,6 +160,7 @@ export const createApprovalTool = tool(
       effort: z.string().describe("LOW, MEDIUM, or HIGH"),
       confidence: z.number().describe("Confidence score 0-100"),
       metrics: z.array(z.string()).describe("Success measurement criteria"),
+      contentItemId: z.string().optional().describe("ID of the related content item, if this approval was created for a content item"),
     }),
   },
 );

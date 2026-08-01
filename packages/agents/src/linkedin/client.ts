@@ -143,11 +143,17 @@ export async function createLinkedInPost(
 
   if (!res.ok) {
     const errBody = await res.text();
-    if (res.status === 400 && errBody.includes("Organization Or Events permissions")) {
+    const lowerBody = errBody.toLowerCase();
+    const isScopeError =
+      res.status === 400 || res.status === 401 || res.status === 403
+        ? /(permission|permissions|scope|authoriz|not authorized|forbidden|w_organization_social|worganizationsocial)/.test(lowerBody)
+        : false;
+    if (isScopeError) {
       throw new Error(
-        "LinkedIn API error 400: The access token lacks 'w_organization_social' scope. " +
-        "Generate a new token with this scope in the LinkedIn Developer Portal (https://developer.linkedin.com). " +
-        "See .env.example for details.",
+        "LinkedIn API error: the access token lacks the 'w_organization_social' scope needed to publish posts as the organization. " +
+        "Generate a new token with 'w_organization_social' (and 'r_organization_social' for reading posts/analytics) selected " +
+        "in the LinkedIn Developer Portal (https://developer.linkedin.com) → your app → Auth → OAuth 2.0 scopes. " +
+        `Original error: ${errBody.slice(0, 300)}`,
       );
     }
     throw new Error(`LinkedIn API error ${res.status}: ${errBody}`);
@@ -187,6 +193,18 @@ export async function getLinkedInPostAnalytics(
 
   if (!res.ok) {
     const errBody = await res.text();
+    const lowerBody = errBody.toLowerCase();
+    const isScopeError =
+      res.status === 401 || res.status === 403
+        ? /(permission|permissions|scope|authoriz|not authorized|forbidden|r_organization_social|rorganizationsocial)/.test(lowerBody)
+        : false;
+    if (isScopeError) {
+      throw new Error(
+        `LinkedIn analytics API error ${res.status}: the access token lacks the 'r_organization_social' scope needed to read posts and analytics. ` +
+        `Add it in the LinkedIn Developer Portal (https://developer.linkedin.com) → your app → Auth → OAuth 2.0 scopes, then generate a new token. ` +
+        `Original error: ${errBody.slice(0, 300)}`,
+      );
+    }
     throw new Error(`LinkedIn analytics API error ${res.status}: ${errBody}`);
   }
 
@@ -243,6 +261,16 @@ export async function getLinkedInPageAnalytics(): Promise<{
       impressions: elements?.impressionCount ?? 0,
       clicks: elements?.clickCount ?? 0,
     };
+  }
+
+  const errBody = await res.text().catch(() => "");
+  const lowerBody = errBody.toLowerCase();
+  if (res.status === 401 || res.status === 403) {
+    throw new Error(
+      `LinkedIn analytics API error ${res.status}: the access token lacks the 'r_organization_social' scope needed to read page analytics. ` +
+      `Add it in the LinkedIn Developer Portal (https://developer.linkedin.com) → your app → Auth → OAuth 2.0 scopes, then generate a new token. ` +
+      `Original error: ${errBody.slice(0, 300)}`,
+    );
   }
 
   return { followers: 0, engagement: 0, impressions: 0, clicks: 0 };
