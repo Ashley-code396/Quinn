@@ -37,6 +37,11 @@ You are Quinn, the CEO's AI Chief Marketing Officer. You are also a friendly, co
 9. Synthesize findings and update priorities.
 10. Present a clear executive briefing.
 
+# Answering Questions vs. Taking Action
+- If the CEO asks a QUESTION about what has been done or the current state ("Did you post on LinkedIn today?", "What approvals are pending?", "Any follow-ups due?"), delegate to the agent that owns that data with a CHECK-AND-REPORT instruction. Never ask an agent to create new work in response to a question.
+- If the CEO chats casually, greets you, or asks something simple, respond directly and set next to "__end__" — no delegation needed.
+- Only delegate a CREATE task (write, draft, research new, find new, generate) when the CEO actually asked you to create something.
+
 # Delegation Rules
 - Delegate to "sage" for industry research, competitor analysis, market trends, counterfeit landscape.
 - Delegate to "nova" for content creation, calendar planning, thought leadership, LinkedIn posts.
@@ -79,11 +84,11 @@ const routingSchema = z.object({
   nextAgent: z
     .string()
     .describe(
-      "Which agent to delegate to next: 'sage', 'nova', 'atlas', 'iris', 'helix', 'beacon', 'synthesize', or '__end__'",
+      "Which agent to delegate to next: 'sage', 'nova', 'atlas', 'iris', 'helix', 'beacon', 'synthesize', or '__end__'. If the user asked a QUESTION about the current state, delegate to the agent that owns that data with a CHECK-and-report instruction. If the user is just chatting, use '__end__' and respond directly. Do NOT send a question to an agent as a create/generate task.",
     ),
   messageToAgent: z
     .string()
-    .describe("Clear, specific instructions for the agent you are delegating to."),
+    .describe("Clear, specific instructions for the agent you are delegating to. For questions, instruct the agent to CHECK AND REPORT the actual state, not to create new work."),
 });
 
 export async function quinnNode(
@@ -103,56 +108,151 @@ export async function quinnNode(
   if (isNewUserMessage) {
     const userText = lastMsg?.content?.toString() ?? "";
     const lower = userText.toLowerCase();
+    const words = lower.split(/[^a-z0-9']+/).filter(Boolean);
+
+    // A QUESTION about past/current state (e.g. "Did you post on LinkedIn today?").
+    // When present, flips a CREATE route into a CHECK-and-report route.
+    const isStatusQuestion =
+      /\b(did|have|has|had|was|were|how many|how are|what did|what have|what's the status|status of|update on)\b/i.test(lower);
 
     interface RouteRule {
       agent: string;
       keywords: string[];
       instruction: string;
+      checkInstruction?: string;
     }
 
-    const routes: RouteRule[] = [
+    const directReply = (reply: string): Partial<QuinnStateType> => ({
+      next: "__end__",
+      messages: [new AIMessage({ content: reply, name: "quinn" })],
+      iterationCount: iterationCount + 1,
+      consultedAgents: [],
+      agentReports: [],
+      recommendations: [],
+      alerts: [],
+    });
+
+    // 1) Direct conversational responses — no delegation needed.
+    const greetingPhrase = ["good morning", "good afternoon", "good evening", "good night", "how are you", "how's it going", "how are you doing", "how have you been", "what's up", "whats up", "good to see you"].find((p) => lower.includes(p));
+    const greetingWord = ["hi", "hello", "hey", "yo", "howdy", "hiya", "sup", "morning", "evening"].find((w) => words.includes(w));
+    const isGreeting = !isStatusQuestion && ((!!greetingWord && words.length <= 4) || (!!greetingPhrase && words.length <= 6));
+    if (isGreeting) {
+      return directReply("Hey! 👋 I'm here and working. What can I help you with?");
+    }
+
+    if (/(who are you|what are you|are you a bot|are you real|what do you do|what can you do|^help$|commands)/.test(lower)) {
+      return directReply(
+        "I'm Quinn, your AI CMO at Dermaqea. I run the marketing team 24/7: " +
+        "Sage (research), Nova (content & LinkedIn), Atlas (growth & grants), " +
+        "Iris (relationships & follow-ups), Beacon (analytics), and Helix (proposals & decks). " +
+        "Ask me anything — or try /today for a summary of what I've done.",
+      );
+    }
+
+    if (/^(thanks|thank you|thank|thx|ty|appreciate it|appreciated|great job|nice work|awesome|sounds good)\b/.test(lower) && words.length <= 5) {
+      return directReply("You're welcome! Anything else I can help with?");
+    }
+
+    if (/^(bye|goodbye|good night|see you|talk later|sleep well)/.test(lower)) {
+      return directReply("Talk soon! I'll keep working in the background — ping me anytime.");
+    }
+
+    // 2) Create / delegation routes. If the request is framed as a status
+    //    question ("did you...?"), route to the same agent but ask it to
+    //    CHECK AND REPORT instead of creating something new.
+    const createRoutes: RouteRule[] = [
       {
         agent: "helix",
-        keywords: ["fill in this form", "fill in this application", "fill in", "draft a proposal", "draft proposal", "grant application", "prepare a pitch deck", "pitch deck for"],
+        keywords: ["fill in this form", "fill in this application", "fill in", "draft a proposal", "draft proposal", "draft a", "proposal", "grant application", "prepare a pitch deck", "pitch deck for", "apply for"],
         instruction: "Fill in or draft the requested materials with Dermaqea's actual company details. Call create_approval with the complete draft for review.",
+        checkInstruction: "The CEO is asking whether a form, proposal, or deck was drafted or submitted. Check what already exists and report factually. Do not draft new materials unless explicitly asked.",
       },
       {
         agent: "atlas",
         keywords: ["growth opportunities", "find opportunities", "active opportunities", "list of grants", "open grants", "upcoming conferences", "accelerator programs", "find partnerships", "pilot customers", "enterprise prospects"],
         instruction: "Search the web for the requested opportunities. For every time-sensitive opportunity, call create_approval so the user can act immediately. Include direct URLs, deadlines, and why Dermaqea should pursue each one.",
+        checkInstruction: "The CEO is asking about current opportunities and pipeline. Use get_opportunities to report what exists. Only run new web searches if they ask for fresh finds. Report first; do not create approvals for every item.",
       },
       {
         agent: "sage",
         keywords: ["do research", "research on", "competitor analysis", "industry trends", "market trends", "research about", "look into", "investigate"],
         instruction: "Research the following topic thoroughly using search_web and extract_web_content. Provide detailed findings with sources.",
+        checkInstruction: "The CEO is asking a research question. Use search_web / extract_web_content as needed to answer it directly and factually. Do not fabricate findings.",
       },
       {
         agent: "nova",
-        keywords: ["write a linkedin post", "write a post", "create a post", "create content", "linkedin post about", "blog post", "social media post"],
+        keywords: ["write a linkedin post", "write a post", "create a post", "create content", "generate content", "linkedin post about", "blog post", "social media post", "write content"],
         instruction: "Generate the requested content. Call create_content_item to save it and create_approval to submit for review.",
+        checkInstruction: "The CEO is asking whether content was created or posted. Use get_content_items and get_linkedin_analytics to check and answer factually. Do NOT create new content.",
       },
       {
         agent: "iris",
         keywords: ["follow up", "who to contact", "relationship check", "crm update"],
         instruction: "Check for overdue follow-ups and relationship health. Recommend specific actions.",
+        checkInstruction: "The CEO is asking about follow-ups and relationships. Use get_follow_ups_due and search_organizations to answer factually. Do not create approvals or send anything.",
       },
       {
         agent: "beacon",
         keywords: ["analytics review", "metrics check", "kpi review", "performance report", "dashboard update"],
         instruction: "Review the latest analytics snapshots and quarterly goal progress. Flag any anomalies or metrics behind target.",
+        checkInstruction: "The CEO is asking about performance. Use get_analytics_snapshots and get_quarterly_goals to answer factually. Do not create new snapshots.",
       },
     ];
 
-    for (const route of routes) {
+    for (const route of createRoutes) {
+      if (route.keywords.some((kw) => lower.includes(kw))) {
+        const instruction = isStatusQuestion && route.checkInstruction ? route.checkInstruction : route.instruction;
+        return {
+          next: route.agent,
+          messages: [new AIMessage({ content: `${instruction}\n\nUser request: ${userText}`, name: "quinn" })],
+          iterationCount: iterationCount + 1,
+          consultedAgents: [route.agent as never],
+          agentReports: [],
+          recommendations: [],
+          alerts: [],
+        };
+      }
+    }
+
+    // 3) Status / check questions — report what actually happened, don't generate.
+    const statusRoutes: RouteRule[] = [
+      {
+        agent: "nova",
+        keywords: ["did you post", "have you posted", "did you publish", "have you published", "did you create", "did you write", "did you send", "have you sent", "did you email", "did you share", "what did you post", "post on linkedin", "posted on linkedin", "posting today", "post today", "linkedin post today", "what did you do today", "what have you done", "what happened today", "did you do anything", "what did you accomplish", "any updates", "updates today", "what's new", "whats new", "content today", "any content", "linkedin"],
+        instruction: "CHECK AND REPORT. The CEO is asking what was actually done — this is NOT a request to create new content. Call get_content_items (check status and publishedAt), get_linkedin_analytics to see recent posts, and get_pending_approvals. Answer factually and conversationally: did we post today? what is pending approval? Do NOT create any new content or approvals.",
+      },
+      {
+        agent: "beacon",
+        keywords: ["analytics", "metrics", "kpi", "performance", "numbers", "goal progress", "on track", "on target", "how are we doing", "tracking", "results", "traffic", "engagement", "followers", "goals"],
+        instruction: "CHECK AND REPORT. Use get_analytics_snapshots and get_quarterly_goals to answer factually about KPIs, performance, and goal progress. Do not create new snapshots or records.",
+      },
+      {
+        agent: "iris",
+        keywords: ["follow up", "follow-up", "followup", "relationship", "who should i contact", "who to contact", "outreach", "crm", "contacts"],
+        instruction: "CHECK AND REPORT. Use get_follow_ups_due and search_organizations to report overdue follow-ups and relationship health. Do not create approvals or send anything.",
+      },
+      {
+        agent: "atlas",
+        keywords: ["opportunit", "grants", "conference", "accelerator", "pipeline", "prospect", "deadline", "upcoming", "partnership", "applications"],
+        instruction: "CHECK AND REPORT. Use get_opportunities to report current opportunities, pipeline, and deadlines. Only run new web searches if the CEO asks for fresh finds. Report first; do not create approvals for every item.",
+      },
+      {
+        agent: "sage",
+        keywords: ["research", "competitor", "industry trend", "market trend", "news", "what's happening", "whats happening", "findings"],
+        instruction: "ANSWER the question about research, competitors, or trends. Use search_web / extract_web_content only if fresh information is needed. Report existing findings when possible. Never fabricate.",
+      },
+      {
+        agent: "nova",
+        keywords: ["approval", "approve", "pending", "to review", "to sign off", "anything for me"],
+        instruction: "CHECK AND REPORT. Call get_pending_approvals and list every item awaiting the CEO's review with its title, priority, and why it was created. Do not create anything new.",
+      },
+    ];
+
+    for (const route of statusRoutes) {
       if (route.keywords.some((kw) => lower.includes(kw))) {
         return {
           next: route.agent,
-          messages: [
-            new AIMessage({
-              content: `${route.instruction}\n\nUser request: ${userText}`,
-              name: "quinn",
-            }),
-          ],
+          messages: [new AIMessage({ content: `${route.instruction}\n\nUser request: ${userText}`, name: "quinn" })],
           iterationCount: iterationCount + 1,
           consultedAgents: [route.agent as never],
           agentReports: [],
@@ -179,18 +279,25 @@ export async function quinnNode(
   }
 
   // Retrieve relevant memories for context
-  const relevantMemories = isRedisMemoryConfigured()
-    ? await searchLongTermMemory({
-        query: state.trigger || "quarterly goals marketing strategy",
-        ownerId: "quinn",
-        namespace: "agent-context",
-        limit: 5,
-        similarityThreshold: 0.7,
-      })
-    : await searchMemories({
-        query: state.trigger || "quarterly goals marketing strategy",
-        limit: 5,
-      });
+  const relevantMemories = await (async () => {
+    try {
+      return isRedisMemoryConfigured()
+        ? await searchLongTermMemory({
+            query: state.trigger || "quarterly goals marketing strategy",
+            ownerId: "quinn",
+            namespace: "agent-context",
+            limit: 5,
+            similarityThreshold: 0.7,
+          })
+        : await searchMemories({
+            query: state.trigger || "quarterly goals marketing strategy",
+            limit: 5,
+          });
+    } catch (e) {
+      console.warn("Memory retrieval failed, continuing without memory:", (e as Error).message);
+      return [];
+    }
+  })();
 
   const memoryContext = relevantMemories.length > 0
     ? `\n# Relevant Memories\n${relevantMemories.map((m) => {

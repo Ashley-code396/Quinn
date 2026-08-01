@@ -28,7 +28,14 @@ export async function beaconNode(state: QuinnStateType): Promise<Partial<QuinnSt
   const lastMessage = state.messages[state.messages.length - 1];
   const taskDesc = lastMessage?.content?.toString() ?? "analyze marketing performance";
 
-  const memories = await searchMemories({ query: taskDesc, limit: 8 });
+  const memories = await (async () => {
+    try {
+      return await searchMemories({ query: taskDesc, limit: 8 });
+    } catch (e) {
+      console.warn("Memory search failed, continuing without it:", (e as Error).message);
+      return [];
+    }
+  })();
   const memCtx = memories.length > 0
     ? `\n# Relevant Knowledge & Previous Analytics\n${memories.map((m) => `[${m.category}] ${m.content}`).join("\n")}`
     : "";
@@ -54,9 +61,12 @@ export async function beaconNode(state: QuinnStateType): Promise<Partial<QuinnSt
     const toolResults: string[] = [];
     for (const tc of response.tool_calls) {
       const tool = beaconTools.find(t => t.name === tc.name);
-      if (tool) {
+      if (!tool) continue;
+      try {
         const result = await (tool as any).invoke(tc.args);
         toolResults.push(`${tc.name} returned:\n${typeof result === "string" ? result.slice(0, 2000) : JSON.stringify(result).slice(0, 2000)}`);
+      } catch (err) {
+        toolResults.push(`${tc.name} failed: ${(err as Error).message}`);
       }
     }
     const existingContent = response.content?.toString()?.trim() || "Tools executed.";

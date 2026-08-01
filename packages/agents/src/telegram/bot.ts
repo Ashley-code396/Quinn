@@ -1,12 +1,14 @@
 import { Telegraf, Markup } from "telegraf";
 import type { Context } from "telegraf";
-import { BaseMessage } from "@langchain/core/messages";
+import { BaseMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { prisma } from "@quinn/database";
 import type { QuinnGraph } from "../graph.js";
 import type { AgentReport, Recommendation, Alert } from "@quinn/shared";
 import { chatWithQuinn, runDailyBriefing, runWeeklyReport, runWeeklyPriorities, runQuarterlyPlanning } from "../workflows/index.js";
 import { isRedisMemoryConfigured, storeSessionEvent } from "../memory/index.js";
 import { executeApprovedAction } from "../executor/index.js";
+import { createModel, withFallback } from "../llm.js";
+import { buildSystemPrompt } from "../prompts/system.js";
 import { getTodaysSummary, formatSummary } from "./summary.js";
 
 let botInstance: Telegraf | null = null;
@@ -46,6 +48,34 @@ function sendSafeMessage(ctx: any, chatId: string | number, text: string): Promi
   return ctx.telegram.sendMessage(chatId, text).catch(() =>
     ctx.telegram.sendMessage(chatId, text.replace(/[*_`~\[\]()]/g, ""))
   );
+}
+
+/**
+ * Last-resort answer when the full agent graph fails. Tries a single direct
+ * LLM call so the CEO still gets a useful reply instead of a canned error.
+ * Returns "" if even that fails.
+ */
+async function safeFallbackReply(text: string): Promise<string> {
+  try {
+    const answer = await withFallback(
+      async (model) => {
+        const res = await model.invoke([
+          new SystemMessage(
+            buildSystemPrompt(
+              "quinn",
+              "# Fallback Mode\nYou are responding because the main agent pipeline hit an error. Be honest, helpful, and concise. If you cannot answer, say so plainly.",
+            ),
+          ),
+          new HumanMessage(text),
+        ]);
+        return res.content?.toString() ?? "";
+      },
+      { temperature: 0.4 },
+    );
+    return answer.trim();
+  } catch {
+    return "";
+  }
 }
 
 const ALLOWED_USERS = (process.env.TELEGRAM_ALLOWED_USERS ?? "")
@@ -386,7 +416,24 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
     } catch (error) {
       clearInterval(typingInterval);
       console.error("❌ Chat error:", error);
-      try { await ctx.telegram.editMessageText(chatId, statusMsgId, undefined, "❌ Sorry, I hit an issue. Try rephrasing that."); } catch { /* already gone */ }
+
+      // Try a direct single-model answer so the CEO still gets a real reply.
+      const fallback = await safeFallbackReply(text);
+      try {
+        if (fallback) {
+          await ctx.telegram.editMessageText(chatId, statusMsgId, undefined, "⚠️ Pipeline hiccup — here's my best direct answer:");
+        }
+      } catch { /* status message already gone */ }
+
+      if (fallback) {
+        try {
+          await ctx.reply(sanitizeMarkdown(fallback), { parse_mode: "Markdown" });
+        } catch {
+          await ctx.reply(fallback);
+        }
+      } else {
+        try { await ctx.telegram.editMessageText(chatId, statusMsgId, undefined, "❌ Sorry, I hit an issue. Please try again in a moment."); } catch { /* already gone */ }
+      }
     }
   });
 

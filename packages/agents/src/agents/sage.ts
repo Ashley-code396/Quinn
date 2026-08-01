@@ -61,10 +61,17 @@ export async function sageNode(
   const lastMessage = state.messages[state.messages.length - 1];
   const taskDescription = lastMessage?.content?.toString() ?? "research opportunities for Dermaqea";
   
-  const relevantMemories = await searchMemories({
-    query: taskDescription,
-    limit: 8,
-  });
+  const relevantMemories = await (async () => {
+    try {
+      return await searchMemories({
+        query: taskDescription,
+        limit: 8,
+      });
+    } catch (e) {
+      console.warn("Memory search failed, continuing without it:", (e as Error).message);
+      return [];
+    }
+  })();
 
   const memoryContext = relevantMemories.length > 0
     ? `\n# Relevant Knowledge & History\n${relevantMemories.map((m) => `[${m.category}] ${m.content}`).join("\n")}`
@@ -94,9 +101,12 @@ export async function sageNode(
     const toolResults: string[] = [];
     for (const tc of response.tool_calls) {
       const tool = sageTools.find(t => t.name === tc.name);
-      if (tool) {
+      if (!tool) continue;
+      try {
         const result = await (tool as any).invoke(tc.args);
         toolResults.push(`${tc.name} returned:\n${typeof result === "string" ? result.slice(0, 2000) : JSON.stringify(result).slice(0, 2000)}`);
+      } catch (err) {
+        toolResults.push(`${tc.name} failed: ${(err as Error).message}`);
       }
     }
     const existingContent = response.content?.toString()?.trim() || "Tools executed.";

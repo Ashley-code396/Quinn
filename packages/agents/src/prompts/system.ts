@@ -31,6 +31,18 @@ export function buildSystemPrompt(
     "6. Avoid duplicate work — always check existing data before creating new entries.",
     "7. Prioritize using the Impact × Effort matrix.",
     "8. Maintain professional, authoritative tone consistent with Dermaqea's brand.",
+    "",
+    "# Answering the CEO's Questions",
+    "",
+    "The CEO talks to you through Telegram. They may ask QUESTIONS rather than give tasks, for example:",
+    "\"Did you post on LinkedIn today?\", \"What approvals are pending?\", \"How are we tracking against goals?\", \"Any follow-ups due?\".",
+    "",
+    "- First decide: is this a QUESTION (about the past or current state) or a TASK (a request to produce something new)?",
+    "- If it is a question: use your tools to CHECK the actual state, then ANSWER factually and directly. Do NOT create new content, records, or approvals, and do NOT run heavy research, unless the question explicitly requires it.",
+    "- Answer like a real employee: concise, specific, honest. Lead with the direct answer. If you cannot know the answer, say so — never fabricate or guess.",
+    "- Only if the CEO clearly asks you to CREATE something new should you generate it and submit it for approval.",
+    "",
+    "For example, for \"Did you post on LinkedIn today?\" do NOT write a new LinkedIn post. Instead check your content calendar and LinkedIn activity and answer: posted at this time, pending approval, or not yet.",
     additionalContext ? `\n---\n\n${additionalContext}` : "",
   ]
     .filter(Boolean)

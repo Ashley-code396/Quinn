@@ -13,6 +13,7 @@ import {
   getContentItemsTool,
   createContentItemTool,
   createApprovalTool,
+  getPendingApprovalsTool,
   logAgentActionTool,
   searchWebTool,
   getLinkedInAnalyticsTool,
@@ -81,6 +82,13 @@ When asked to generate daily content:
   2. Call 'create_approval' with type LINKEDIN_POST or BLOG_POST to submit it for human approval
   3. Only after calling both tools, include the full post text in your response
 - **Proactive content generation**: Even without being explicitly asked, generate content when there are gaps in the calendar or when trending topics match our pillars. Use 'search_web' to find timely hooks, then create the content and submit for approval.
+
+# Reporting Mode (Questions about what was done)
+- If the CEO asks a QUESTION about the current state — e.g. "Did you post on LinkedIn today?", "What content is scheduled?", "Any pending approvals?" — you are in REPORTING MODE.
+- REPORTING MODE means: use your tools to CHECK the actual state and answer the question. Do NOT write or generate new content.
+- For "did we post on LinkedIn today?": call get_content_items (filter by status, check publishedAt), get_linkedin_analytics (recent posts), and get_pending_approvals. Report exactly what you find: posted at this time + URL, draft pending approval, or nothing yet today.
+- For "what needs my approval?": call get_pending_approvals and list each item with title, priority, and reasoning.
+- Answer conversationally and honestly, like a real marketing manager would. Never fabricate a post that does not exist.
 `;
 
 export async function novaNode(
@@ -91,10 +99,17 @@ export async function novaNode(
   const taskDescription = lastMessage?.content?.toString() ?? "generate content ideas";
 
   // Check existing content to avoid repetition
-  const existingContent = await searchMemories({
-    query: taskDescription,
-    limit: 8,
-  });
+  const existingContent = await (async () => {
+    try {
+      return await searchMemories({
+        query: taskDescription,
+        limit: 8,
+      });
+    } catch (e) {
+      console.warn("Memory search failed, continuing without it:", (e as Error).message);
+      return [];
+    }
+  })();
 
   const memoryContext = existingContent.length > 0
     ? `\n# Relevant Knowledge & Previous Content\n${existingContent.map((m) => `[${m.category}] ${m.content}`).join("\n")}`
@@ -102,7 +117,7 @@ export async function novaNode(
 
   const systemPrompt = buildSystemPrompt("nova", NOVA_CONTEXT + memoryContext);
 
-  const novaTools = [searchWebTool, getContentItemsTool, createContentItemTool, createApprovalTool, logAgentActionTool, getLinkedInAnalyticsTool, generateVideoTool, generateImageTool, generatePdfTool, generateSlidesTool];
+  const novaTools = [searchWebTool, getContentItemsTool, createContentItemTool, createApprovalTool, getPendingApprovalsTool, logAgentActionTool, getLinkedInAnalyticsTool, generateVideoTool, generateImageTool, generatePdfTool, generateSlidesTool];
 
 
   const novaMessages = [
@@ -125,9 +140,12 @@ export async function novaNode(
     const toolResults: string[] = [];
     for (const tc of response.tool_calls) {
       const tool = novaTools.find(t => t.name === tc.name);
-      if (tool) {
+      if (!tool) continue;
+      try {
         const result = await (tool as any).invoke(tc.args);
         toolResults.push(`${tc.name} returned:\n${typeof result === "string" ? result.slice(0, 2000) : JSON.stringify(result).slice(0, 2000)}`);
+      } catch (err) {
+        toolResults.push(`${tc.name} failed: ${(err as Error).message}`);
       }
     }
     const existingContent = response.content?.toString()?.trim() || "Tools executed.";
