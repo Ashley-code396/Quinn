@@ -261,6 +261,39 @@ export async function quinnNode(
         };
       }
     }
+
+    // 4) Catch-all: small talk / casual chatter that slipped past the exact
+    //    greeting match (e.g. "What's up today...it's too quiet over here").
+    //    These get a short, on-point reply — never a research dump or a
+    //    delegation. Anything mentioning a work topic routes below to the LLM.
+    const workTopicRegex =
+      /\b(application|form|proposal|grant|post|content|analytics|research|report|follow[ -]?up|opportunit|conference|linkedin|goal|kpi|campaign|partnership|prospect|deadline|pipeline|status|updates|news)\b/i;
+    const allRouteKeywords = [
+      ...createRoutes.flatMap((r) => r.keywords),
+      ...statusRoutes.flatMap((r) => r.keywords),
+    ];
+    const hasWorkTopic =
+      workTopicRegex.test(lower) || allRouteKeywords.some((kw) => lower.includes(kw));
+
+    const smallTalkPhrases = [
+      "too quiet", "quiet over here", "quiet today", "quiet", "slow day", "slow today",
+      "nothing happening", "anything interesting", "anything new", "any news",
+      "what's going on", "whats going on", "what's happening", "whats happening",
+      "what's up today", "whats up today", "how's it going", "hows it going",
+      "how is it going", "catch me up", "any updates today", "how are things",
+    ];
+    const isSmallTalk =
+      !isStatusQuestion &&
+      !hasWorkTopic &&
+      (smallTalkPhrases.some((p) => lower.includes(p)) ||
+        (!!greetingPhrase && !hasWorkTopic) ||
+        (!!greetingWord && words.length <= 6 && !hasWorkTopic));
+    if (isSmallTalk) {
+      return directReply(
+        "Ha, it's quiet — which means no fires to put out. 🔥 I'm here and ready when you are. " +
+          "Want a quick briefing, a look at pending approvals, or something else?",
+      );
+    }
   }
 
   // Safety: prevent infinite delegation loops

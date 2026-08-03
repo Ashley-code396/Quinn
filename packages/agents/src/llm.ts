@@ -69,12 +69,12 @@ function getGroqModel(desired?: string): string {
 
 function getGeminiModel(desired?: string): string {
   if (desired && desired !== "llama-3.3-70b-versatile") return desired;
-  return "gemini-3.5-flash";
+  return process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
 }
 
 function getOpenRouterModel(desired?: string): string {
   if (desired && desired !== "llama-3.3-70b-versatile" && !desired.startsWith("gemini-")) return desired;
-  return "meta-llama/llama-3.1-8b-instruct:free";
+  return process.env.OPENROUTER_MODEL ?? "meta-llama/llama-3.1-8b-instruct";
 }
 
 export function createModel(config: ModelConfig = {}): Model {
