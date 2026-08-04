@@ -69,7 +69,7 @@ function getGroqModel(desired?: string): string {
 
 function getGeminiModel(desired?: string): string {
   if (desired && desired !== "llama-3.3-70b-versatile") return desired;
-  return process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+  return process.env.GEMINI_MODEL ?? "gemini-3.5-flash";
 }
 
 function getOpenRouterModel(desired?: string): string {
