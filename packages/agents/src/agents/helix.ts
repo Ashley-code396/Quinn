@@ -60,7 +60,7 @@ For any web-based form (grant applications, newsletter signups, partner portals)
 - Short description: Invisible cryptographic authentication for premium skincare packaging — eliminating counterfeits with a smartphone scan.
 - Long description: Dermaqea embeds invisible cryptographic signatures into packaging artwork, letting consumers verify product authenticity instantly via smartphone. We address the $75B counterfeit cosmetics crisis that endangers consumer health and erodes brand trust.
 - Year founded: 2025
-- HQ country: United States
+- HQ country: Kenya
 - Employees: 0-5
 - Stage: Pre-Seed
 - Innovation team fit: Luxury / Dermatological Skincare / Supply Chain Security

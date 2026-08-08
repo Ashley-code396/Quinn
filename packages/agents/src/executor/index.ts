@@ -230,7 +230,7 @@ async function handlePartnershipProposal(approval: any): Promise<ExecutionResult
         `4. Launch pilot and measure results`,
         ``,
         `## Contact`,
-        `Ashley Luna, CEO & Founder`,
+        `Ashley Mwende, Founder`,
         `Dermaqea`,
         `https://dermaqea.vercel.app`,
       ].join("\n"),
@@ -263,8 +263,8 @@ async function handlePartnershipProposal(approval: any): Promise<ExecutionResult
           `Would you be open to a quick chat next week?`,
           ``,
           `Best,`,
-          `Ashley Luna`,
-          `CEO, Dermaqea`,
+          `Ashley Mwende`,
+          `Founder, Dermaqea`,
           `https://dermaqea.vercel.app`,
         ].join("\n");
 

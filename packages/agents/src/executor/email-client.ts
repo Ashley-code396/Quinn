@@ -7,5 +7,5 @@ export function getResendClient(): Resend | null {
 }
 
 export function getFromAddress(): string {
-  return process.env.EMAIL_FROM_ADDRESS || "quinn@dermaqea.com";
+  return process.env.EMAIL_FROM_ADDRESS || "dermaqea@gmail.com";
 }
