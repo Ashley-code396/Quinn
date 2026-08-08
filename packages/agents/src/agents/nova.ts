@@ -161,10 +161,16 @@ export async function novaNode(
     // content item's status (IDEA -> APPROVED -> PUBLISHED) on approval.
     if (createdContentItemId && createdApprovalId) {
       try {
-        await prisma.approval.update({
-          where: { id: createdApprovalId },
-          data: { contentItemId: createdContentItemId },
+        const itemExists = await prisma.contentItem.findUnique({
+          where: { id: createdContentItemId },
+          select: { id: true },
         });
+        if (itemExists) {
+          await prisma.approval.update({
+            where: { id: createdApprovalId },
+            data: { contentItemId: createdContentItemId },
+          });
+        }
       } catch (e) {
         console.warn("Could not link approval to content item:", (e as Error).message);
       }
