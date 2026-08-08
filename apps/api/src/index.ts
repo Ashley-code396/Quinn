@@ -109,7 +109,7 @@ app.post("/api/approvals/:id/approve", async (req, res) => {
     },
   });
   broadcast("approval:updated", approval);
-  cacheDel("analytics", "summary").catch(() => {});
+  cacheDel("analytics", "summary").catch(() => { });
   executeApprovedAction(req.params.id).catch((err) => console.error("Post-approval execution failed:", err));
   res.json(approval);
 });
@@ -124,7 +124,7 @@ app.post("/api/approvals/:id/reject", async (req, res) => {
     },
   });
   broadcast("approval:updated", approval);
-  cacheDel("analytics", "summary").catch(() => {});
+  cacheDel("analytics", "summary").catch(() => { });
   res.json(approval);
 });
 
@@ -286,9 +286,9 @@ app.post("/api/quinn/trigger/:workflow", async (req, res) => {
   }
   try {
     const jobId = await triggerWorkflow(schedulerQueue, workflow);
-    cacheInvalidate("*").catch(() => {});
+    cacheInvalidate("*").catch(() => { });
     broadcast("workflow:started", { workflow, jobId });
-    pushApprovalsToTelegram().catch(() => {});
+    pushApprovalsToTelegram().catch(() => { });
     res.json({ jobId, workflow, status: "queued" });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
@@ -332,12 +332,28 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 
 // ---- Startup ----
 async function start() {
-  if (!process.env.GROQ_API_KEY) {
-    console.error("FATAL: GROQ_API_KEY is not set. Agents cannot function.");
+  const hasGroq = !!process.env.GROQ_API_KEY;
+  const hasGemini = !!process.env.GEMINI_API_KEY;
+  const hasOpenRouter = !!process.env.OPENROUTER_API_KEY;
+
+  if (!hasGroq && !hasGemini && !hasOpenRouter) {
+    console.error("FATAL: No LLM API key configured (GROQ_API_KEY, GEMINI_API_KEY, or OPENROUTER_API_KEY). Agents cannot function.");
     process.exit(1);
   }
 
   console.log("\n🚀 Starting Quinn API Server...\n");
+
+  console.log("  🔑 API Keys & Service Status:");
+  console.log(`    - GROQ_API_KEY:          ${hasGroq ? "✅ Set" : "⚠️  Missing (Primary LLM)"}`);
+  console.log(`    - GEMINI_API_KEY:        ${hasGemini ? "✅ Set" : "ℹ️  Missing (Fallback LLM)"}`);
+  console.log(`    - OPENROUTER_API_KEY:    ${hasOpenRouter ? "✅ Set" : "ℹ️  Missing (Fallback LLM)"}`);
+  console.log(`    - TAVILY_API_KEY:        ${process.env.TAVILY_API_KEY ? "✅ Set" : "⚠️  Missing (Web Search disabled)"}`);
+  console.log(`    - RUNWAY_API_KEY:        ${process.env.RUNWAY_API_KEY ? "✅ Set" : "⚠️  Missing (Media generation disabled)"}`);
+  console.log(`    - RESEND_API_KEY:        ${process.env.RESEND_API_KEY ? "✅ Set" : "⚠️  Missing (Email sending disabled)"}`);
+  console.log(`    - LINKEDIN_ACCESS_TOKEN: ${process.env.LINKEDIN_ACCESS_TOKEN ? "✅ Set" : "⚠️  Missing (LinkedIn integration disabled)"}`);
+  console.log(`    - TELEGRAM_BOT_TOKEN:    ${process.env.TELEGRAM_BOT_TOKEN ? "✅ Set" : "⚠️  Missing (Telegram bot disabled)"}`);
+  console.log(`    - AGENT_MEMORY_API_KEY:  ${process.env.AGENT_MEMORY_API_KEY ? "✅ Set" : "ℹ️  Missing (Using local Redis memory)"}\n`);
+
 
   graph = await buildQuinnGraph();
   console.log("  ✅ Quinn agent graph compiled");
@@ -396,8 +412,8 @@ start().catch((err) => {
 async function shutdown(signal: string) {
   console.log(`\n${signal} received. Shutting down gracefully...`);
   server.close();
-  await closeRedis().catch(() => {});
-  await prisma.$disconnect().catch(() => {});
+  await closeRedis().catch(() => { });
+  await prisma.$disconnect().catch(() => { });
   process.exit(0);
 }
 process.on("SIGTERM", () => shutdown("SIGTERM"));
