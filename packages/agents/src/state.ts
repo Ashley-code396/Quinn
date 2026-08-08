@@ -47,19 +47,19 @@ export const QuinnState = Annotation.Root({
 
   /** Reports collected from worker agents during this run */
   agentReports: Annotation<AgentReport[]>({
-    reducer: (existing, incoming) => existing.concat(incoming),
+    reducer: (existing, incoming) => (incoming.length === 0 ? [] : existing.concat(incoming)),
     default: () => [],
   }),
 
   /** Recommendations accumulated during this run */
   recommendations: Annotation<Recommendation[]>({
-    reducer: (existing, incoming) => existing.concat(incoming),
+    reducer: (existing, incoming) => (incoming.length === 0 ? [] : existing.concat(incoming)),
     default: () => [],
   }),
 
   /** Alerts raised during this run */
   alerts: Annotation<Alert[]>({
-    reducer: (existing, incoming) => existing.concat(incoming),
+    reducer: (existing, incoming) => (incoming.length === 0 ? [] : existing.concat(incoming)),
     default: () => [],
   }),
 
@@ -72,6 +72,7 @@ export const QuinnState = Annotation.Root({
   /** Track which agents have been consulted in this workflow */
   consultedAgents: Annotation<AgentNameType[]>({
     reducer: (existing, incoming) => {
+      if (incoming.length === 0) return [];
       const set = new Set([...existing, ...incoming]);
       return Array.from(set);
     },

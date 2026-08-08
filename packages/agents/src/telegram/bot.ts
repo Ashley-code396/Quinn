@@ -182,10 +182,8 @@ export async function pushFindingsToTelegram(
   const agentReports = (result.agentReports as AgentReport[] | undefined) ?? [];
   const messages = result.messages as BaseMessage[] | undefined;
   const workflowTrigger = result.trigger as string | undefined;
-
   const newReports = agentReports.slice(seenReportCount);
-
-  if (newReports.length === 0 && (!messages || messages.length === 0)) return;
+  if (newReports.length === 0) return;
 
   if (seenReportCount === 0 && newReports.length > 0) {
     const workflowLabel = workflowTrigger
@@ -211,21 +209,6 @@ export async function pushFindingsToTelegram(
         try {
           await bot.telegram.sendMessage(chatId, chunk);
         } catch { /* skip chunk errors */ }
-      }
-    }
-  }
-
-  if (!newReports.length) {
-    const finalMessage = messages?.[messages.length - 1];
-    const briefing = finalMessage?.content?.toString() ?? "";
-    if (briefing && briefing.length > 20) {
-      const chunks = splitIntoChunks(briefing, 3900);
-      for (const chunk of chunks) {
-        try {
-          await bot.telegram.sendMessage(chatId, chunk);
-        } catch (err) {
-          console.error("Failed to push briefing chunk to Telegram:", (err as Error).message);
-        }
       }
     }
   }
@@ -269,9 +252,8 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
     }
     await ctx.reply(`⏳ Running ${workflow}...`);
     try {
-      const result = await runWorkflow(workflow);
+      await runWorkflow(workflow);
       await ctx.reply(`✅ ${workflow} completed.`);
-      if (result) await pushFindingsToTelegram(result);
       await pushApprovalsToTelegram();
     } catch (err) {
       const msg = (err as Error).message.toLowerCase();
@@ -279,9 +261,8 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
         await ctx.reply("⏳ AI is rate limited. Waiting a moment before retrying...");
         await new Promise((r) => setTimeout(r, 10000));
         try {
-          const result = await runWorkflow(workflow);
+          await runWorkflow(workflow);
           await ctx.reply(`✅ ${workflow} completed (after retry).`);
-          if (result) await pushFindingsToTelegram(result);
           return;
         } catch { /* fall through */ }
       }
@@ -368,6 +349,14 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
     }, 4000);
 
     let seenReportCount = 0;
+    try {
+      const currentState = await graph.getState({ configurable: { thread_id: threadId } });
+      const existingReports = (currentState?.values?.agentReports as AgentReport[] | undefined) ?? [];
+      seenReportCount = existingReports.length;
+    } catch {
+      seenReportCount = 0;
+    }
+
     let consultedBefore = 0;
 
     try {
@@ -399,10 +388,12 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
       // Clean up status message
       try { await ctx.telegram.deleteMessage(chatId, statusMsgId); } catch { /* already gone */ }
 
-      // Send final Quinn response
+      // Send final Quinn response (find latest AI message)
       const msgs = (result.messages as BaseMessage[]) ?? [];
-      const lastMessage = msgs[msgs.length - 1];
-      const answer = lastMessage?.content?.toString() ?? "";
+      const lastAiMessage = [...msgs].reverse().find(
+        (m) => (m as any)._getType?.() === "ai" || (m as any).role === "assistant" || (m as any).name === "quinn" || (m as any).name === "synthesize"
+      );
+      const answer = lastAiMessage?.content?.toString() ?? "";
       if (answer) {
         if (sessionId && isRedisMemoryConfigured()) {
           storeSessionEvent({ sessionId, actorId: "quinn", role: "ASSISTANT", text: answer.slice(0, 4000) }).catch(() => {});
