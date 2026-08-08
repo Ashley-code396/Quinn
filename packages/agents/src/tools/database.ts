@@ -131,8 +131,21 @@ export const getPendingApprovalsTool = tool(
  */
 export const createApprovalTool = tool(
   async (params) => {
+    let contentItemId: string | null = null;
+    if (params.contentItemId && typeof params.contentItemId === "string" && params.contentItemId.trim().length > 0) {
+      const candidate = params.contentItemId.trim();
+      const existing = await prisma.contentItem.findUnique({
+        where: { id: candidate },
+        select: { id: true },
+      });
+      if (existing) {
+        contentItemId = existing.id;
+      }
+    }
+
     const data = {
       ...params,
+      contentItemId,
       type: asEnum(params.type, APPROVAL_TYPES, "OTHER"),
       priority: asEnum(params.priority, PRIORITIES, "MEDIUM"),
       effort: asEnum(params.effort, EFFORTS, "MEDIUM"),
