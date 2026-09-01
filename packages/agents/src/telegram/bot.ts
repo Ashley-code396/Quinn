@@ -94,13 +94,16 @@ function isAllowed(ctx: Context): boolean {
   return allowed;
 }
 
-export async function pushApprovalsToTelegram(): Promise<void> {
+export async function pushApprovalsToTelegram(since?: Date): Promise<void> {
   const bot = botInstance;
   const chatId = authorizedChatId ?? process.env.TELEGRAM_CHAT_ID ?? null;
   if (!bot || !chatId) return;
 
   const pending = await prisma.approval.findMany({
-    where: { status: "PENDING" },
+    where: {
+      status: "PENDING",
+      ...(since ? { createdAt: { gte: since } } : {}),
+    },
     orderBy: { createdAt: "asc" },
     take: 20,
   });
@@ -252,17 +255,20 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
     }
     await ctx.reply(`⏳ Running ${workflow}...`);
     try {
+      const runStartedAt = new Date();
       await runWorkflow(workflow);
       await ctx.reply(`✅ ${workflow} completed.`);
-      await pushApprovalsToTelegram();
+      await pushApprovalsToTelegram(runStartedAt);
     } catch (err) {
       const msg = (err as Error).message.toLowerCase();
       if (msg.includes("429") || msg.includes("rate limit")) {
         await ctx.reply("⏳ AI is rate limited. Waiting a moment before retrying...");
         await new Promise((r) => setTimeout(r, 10000));
         try {
+          const runStartedAt = new Date();
           await runWorkflow(workflow);
           await ctx.reply(`✅ ${workflow} completed (after retry).`);
+          await pushApprovalsToTelegram(runStartedAt);
           return;
         } catch { /* fall through */ }
       }
@@ -358,6 +364,7 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
     }
 
     let consultedBefore = 0;
+    const runStartedAt = new Date();
 
     try {
       const result = await chatWithQuinn(graph, text, threadId, async (state) => {
@@ -383,7 +390,7 @@ export function createTelegramBot(graph: QuinnGraph): Telegraf | null {
       clearInterval(typingInterval);
 
       // Push any approvals created by agents during this chat
-      await pushApprovalsToTelegram();
+      await pushApprovalsToTelegram(runStartedAt);
 
       // Clean up status message
       try { await ctx.telegram.deleteMessage(chatId, statusMsgId); } catch { /* already gone */ }

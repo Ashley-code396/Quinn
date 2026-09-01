@@ -175,12 +175,13 @@ async function runAgentAutonomous(
 
 /** Nova autonomously generates content and submits it for approval. */
 export async function runNovaAutonomous(task?: string): Promise<Record<string, unknown>> {
+  const startedAt = new Date();
   const result = await runAgentAutonomous(
     novaNode,
     task ?? "It's a new day. Review the content calendar for gaps, search the web for trending skincare/beauty topics that match our pillars, then generate a LinkedIn post. Generate a matching image using generate_image. Create the content item and submit everything for approval via create_approval — never publish directly.",
     "content-generation",
   );
-  await pushApprovalsToTelegram();
+  await pushApprovalsToTelegram(startedAt);
   return result;
 }
 
