@@ -18,6 +18,10 @@ export type ModelConfig = {
 
 export type LLMProvider = "groq" | "gemini" | "openrouter";
 
+/** Default Groq model (free plan) — llama-3.3-70b-versatile was deprecated 2026-08-16,
+ * replaced by openai/gpt-oss-120b. Override via GROQ_MODEL. */
+const GROQ_DEFAULT_MODEL = process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
+
 let currentProvider: LLMProvider = "groq";
 let groqErrors = 0;
 let geminiErrors = 0;
@@ -64,17 +68,17 @@ function isToolCallError(error: unknown): boolean {
 }
 
 function getGroqModel(desired?: string): string {
-  return desired ?? "llama-3.3-70b-versatile";
+  return desired ?? GROQ_DEFAULT_MODEL;
 }
 
 function getGeminiModel(desired?: string): string {
-  if (desired && desired !== "llama-3.3-70b-versatile") return desired;
+  if (desired && desired !== GROQ_DEFAULT_MODEL) return desired;
   return process.env.GEMINI_MODEL ?? "gemini-3.5-flash";
 }
 
 function getOpenRouterModel(desired?: string): string {
-  if (desired && desired !== "llama-3.3-70b-versatile" && !desired.startsWith("gemini-")) return desired;
-  return process.env.OPENROUTER_MODEL ?? "meta-llama/llama-3.1-8b-instruct";
+  if (desired && desired !== GROQ_DEFAULT_MODEL && !desired.startsWith("gemini-")) return desired;
+  return process.env.OPENROUTER_MODEL ?? "openai/gpt-oss-120b:free";
 }
 
 export function createModel(config: ModelConfig = {}): Model {

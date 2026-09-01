@@ -54,14 +54,16 @@ Quinn is **not** a chatbot. Quinn is a long-term AI employee that serves as Derm
 
 | Agent | Role | Model | Tools |
 |-------|------|-------|-------|
-| **Quinn** | CMO supervisor — delegates, strategizes, responds conversationally | `llama-3.3-70b-versatile` | Memory search, agent coordination |
-| **Sage** | Research intelligence — companies, competitors, industry trends | `llama-3.3-70b-versatile` | Web search, content extraction, CRM write |
-| **Nova** | Content marketing — LinkedIn, blog, newsletters, calendar | `llama-3.3-70b-versatile` | Web search, content CRUD, approvals |
-| **Atlas** | Growth & BD — partnerships, grants, accelerators, prospects | `llama-3.3-70b-versatile` | Web search, opportunity scoring, approvals |
-| **Iris** | Relationship management — CRM, follow-ups, outreach | `llama-3.3-70b-versatile` | Follow-up tracking, CRM read, approvals |
-| **Helix** | Presentations & assets — decks, proposals, materials | `llama-3.3-70b-versatile` | Asset generation, approvals |
-| **Beacon** | Analytics — KPIs, performance tracking, OKR progress | `llama-3.3-70b-versatile` | Analytics queries, goal tracking |
-| **Synthesize** | Final briefing — compiles reports into executive summary | `llama-3.3-70b-versatile` | Database writes, briefing generation |
+| **Quinn** | CMO supervisor — delegates, strategizes, responds conversationally | `openai/gpt-oss-120b` | Memory search, agent coordination |
+| **Sage** | Research intelligence — companies, competitors, industry trends | `openai/gpt-oss-120b` | Web search, content extraction, CRM write |
+| **Nova** | Content marketing — LinkedIn, blog, newsletters, calendar | `openai/gpt-oss-120b` | Web search, content CRUD, approvals |
+| **Atlas** | Growth & BD — partnerships, grants, accelerators, prospects | `openai/gpt-oss-120b` | Web search, opportunity scoring, approvals |
+| **Iris** | Relationship management — CRM, follow-ups, outreach | `openai/gpt-oss-120b` | Follow-up tracking, CRM read, approvals |
+| **Helix** | Presentations & assets — decks, proposals, materials | `openai/gpt-oss-120b` | Asset generation, approvals |
+| **Beacon** | Analytics — KPIs, performance tracking, OKR progress | `openai/gpt-oss-120b` | Analytics queries, goal tracking |
+| **Synthesize** | Final briefing — compiles reports into executive summary | `openai/gpt-oss-120b` | Database writes, briefing generation |
+
+> **Models are all free-tier:** Groq free plan (`openai/gpt-oss-120b`), Gemini free tier (`gemini-3.5-flash`), and OpenRouter `:free` (`openai/gpt-oss-120b:free`). The stack auto-falls back Groq → Gemini → OpenRouter on rate limits. All are overridable via `GROQ_MODEL`, `GEMINI_MODEL`, `OPENROUTER_MODEL`.
 
 ## Data Flow
 
